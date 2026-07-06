@@ -42,19 +42,21 @@ export queue, and the mobile/AI-module groundwork.
 **Windows** — open PowerShell in the project folder and run:
 
 ```powershell
-.\scripts\setup.ps1
+.\scripts\setup.ps1 -Run
 ```
 
 The script installs Git, CMake, Python, and MSVC if they're missing, downloads
-prebuilt Qt binaries, uses vcpkg for FFmpeg only, then builds and tests the
-app. First run usually takes **10–20 minutes** (mostly Qt download + FFmpeg
-build); later builds are much faster.
+prebuilt Qt binaries, uses vcpkg for FFmpeg only, builds and tests the app, then
+copies the runtime DLLs so it actually launches. First run usually takes
+**10–20 minutes**; **re-runs skip anything already installed**.
 
-Add `-Run` to launch the app when the build finishes:
+To open the app later (without rebuilding):
 
 ```powershell
-.\scripts\setup.ps1 -Run
+.\scripts\run.ps1
 ```
+
+Non-developer walkthrough: [`docs/INSTALL-WINDOWS.md`](docs/INSTALL-WINDOWS.md)
 
 **Linux / macOS:**
 

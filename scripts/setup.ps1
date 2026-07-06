@@ -3,19 +3,26 @@
   One-command setup and build for Nova Studio on Windows.
 
 .DESCRIPTION
-  Installs missing build tools (Git, CMake, MSVC, Python) via winget when possible,
-  downloads prebuilt Qt binaries, uses vcpkg for FFmpeg only, then builds the app.
+  Installs missing build tools via winget, downloads prebuilt Qt, builds FFmpeg
+  with vcpkg, compiles Nova Studio, deploys runtime DLLs, and optionally runs the app.
+
+  Safe to re-run: already-installed tools and downloads are skipped automatically.
 
 .EXAMPLE
   .\scripts\setup.ps1
 
 .EXAMPLE
   .\scripts\setup.ps1 -Run
+
+.EXAMPLE
+  .\scripts\setup.ps1 -DeployOnly -Run
 #>
 param(
     [switch]$SkipBuild,
     [switch]$Run,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$Force,
+    [switch]$DeployOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,11 +34,17 @@ Set-Location $Root
 $QtVersion = "6.8.3"
 $QtArch = "win64_msvc2022_64"
 $QtModules = @("qtopenglwidgets")
+$VcpkgTriplet = "x64-windows-release"
 
 function Write-Step {
     param([string]$Message)
     Write-Host ""
     Write-Host "==> $Message" -ForegroundColor Cyan
+}
+
+function Write-Ok {
+    param([string]$Message)
+    Write-Host "  OK: $Message" -ForegroundColor DarkGray
 }
 
 function Refresh-Path {
@@ -45,10 +58,19 @@ function Test-Command {
     return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+function Get-AppExe {
+    return Join-Path $Root "build\Release\nova_studio.exe"
+}
+
+function Get-ReleaseDir {
+    return Join-Path $Root "build\Release"
+}
+
 function Ensure-Winget {
     if (-not (Test-Command winget)) {
-        throw "winget is required but was not found. Install 'App Installer' from the Microsoft Store, then re-run this script."
+        throw "winget is required but was not found. Open the Microsoft Store, install 'App Installer', then re-run this script."
     }
+    Write-Ok "winget is available"
 }
 
 function Install-WingetPackage {
@@ -57,13 +79,21 @@ function Install-WingetPackage {
         [string[]]$ExtraArgs = @()
     )
 
+    $listArgs = @("list", "--id", $Id, "-e")
+    & winget @listArgs 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Ok "$Id already installed"
+        return
+    }
+
     $wingetArgs = @(
         "install", "--id", $Id, "-e",
         "--accept-source-agreements", "--accept-package-agreements"
     ) + $ExtraArgs
 
     & winget @wingetArgs
-    if ($LASTEXITCODE -ne 0) {
+    # 0 = installed, -1978335189 = already up to date / no upgrade available
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) {
         throw "winget install $Id failed (exit code $LASTEXITCODE)."
     }
 
@@ -72,6 +102,7 @@ function Install-WingetPackage {
 
 function Ensure-Git {
     if (Test-Command git) {
+        Write-Ok "Git found"
         return
     }
 
@@ -85,6 +116,7 @@ function Ensure-Git {
 
 function Ensure-CMake {
     if (Test-Command cmake) {
+        Write-Ok "CMake found"
         return
     }
 
@@ -98,6 +130,7 @@ function Ensure-CMake {
 
 function Ensure-Python {
     if (Test-Command python) {
+        Write-Ok "Python found"
         return
     }
 
@@ -123,6 +156,7 @@ function Get-VsInstallPath {
 function Ensure-MSVC {
     $existing = Get-VsInstallPath
     if ($existing) {
+        Write-Ok "MSVC found at $existing"
         return $existing
     }
 
@@ -164,11 +198,11 @@ function Get-QtInstallPath {
 function Ensure-Qt {
     $existing = Get-QtInstallPath
     if ($existing) {
-        Write-Step "Using prebuilt Qt at $existing"
+        Write-Ok "Qt $QtVersion already downloaded"
         return $existing
     }
 
-    Write-Step "Downloading prebuilt Qt $QtVersion (much faster than compiling from source)..."
+    Write-Step "Downloading prebuilt Qt $QtVersion (one-time download)..."
     Ensure-Python
 
     python -m pip install --upgrade aqtinstall --quiet
@@ -202,6 +236,8 @@ function Ensure-Vcpkg {
     if (-not (Test-Path $vcpkgDir)) {
         Write-Step "Cloning vcpkg into .vcpkg (one-time setup)..."
         git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkgDir
+    } else {
+        Write-Ok "vcpkg checkout present"
     }
 
     $vcpkgExe = Join-Path $vcpkgDir "vcpkg.exe"
@@ -212,6 +248,8 @@ function Ensure-Vcpkg {
         if ($LASTEXITCODE -ne 0) {
             throw "vcpkg bootstrap failed."
         }
+    } else {
+        Write-Ok "vcpkg bootstrapped"
     }
 
     return $vcpkgDir
@@ -250,7 +288,7 @@ function Remove-StaleBuildCache {
     if ($cache -match 'CMAKE_GENERATOR:INTERNAL=([^\r\n]+)') {
         $existingGenerator = $Matches[1].Trim()
         if ($existingGenerator -ne $ExpectedGenerator) {
-            Write-Step "Removing stale build cache (was '$existingGenerator', need '$ExpectedGenerator')..."
+            Write-Step "Removing stale build cache (generator changed)..."
             $shouldRemove = $true
         }
     }
@@ -258,7 +296,7 @@ function Remove-StaleBuildCache {
     if ($cache -match 'VCPKG_TARGET_TRIPLET:STRING=([^\r\n]+)') {
         $existingTriplet = $Matches[1].Trim()
         if ($existingTriplet -ne $ExpectedTriplet) {
-            Write-Step "Removing stale vcpkg cache (was '$existingTriplet', need '$ExpectedTriplet')..."
+            Write-Step "Removing stale build cache (vcpkg triplet changed)..."
             $shouldRemove = $true
         }
     }
@@ -266,11 +304,11 @@ function Remove-StaleBuildCache {
     if ($cache -match 'CMAKE_PREFIX_PATH:STRING=([^\r\n]*)') {
         $existingQtPath = $Matches[1].Trim()
         if ($existingQtPath -ne $ExpectedQtPath) {
-            Write-Step "Removing stale Qt cache (was '$existingQtPath', need '$ExpectedQtPath')..."
+            Write-Step "Removing stale build cache (Qt path changed)..."
             $shouldRemove = $true
         }
     } else {
-        Write-Step "Removing stale build cache (missing prebuilt Qt path)..."
+        Write-Step "Removing stale build cache (missing Qt path)..."
         $shouldRemove = $true
     }
 
@@ -279,25 +317,51 @@ function Remove-StaleBuildCache {
     }
 }
 
+function Test-ConfigureUpToDate {
+    param(
+        [string]$ExpectedGenerator,
+        [string]$ExpectedTriplet,
+        [string]$ExpectedQtPath
+    )
+
+    if ($Force) {
+        return $false
+    }
+
+    $cacheFile = Join-Path $Root "build\CMakeCache.txt"
+    if (-not (Test-Path $cacheFile)) {
+        return $false
+    }
+
+    $cache = Get-Content $cacheFile -Raw
+    return ($cache -match "CMAKE_GENERATOR:INTERNAL=$([regex]::Escape($ExpectedGenerator))") `
+        -and ($cache -match "VCPKG_TARGET_TRIPLET:STRING=$([regex]::Escape($ExpectedTriplet))") `
+        -and ($cache -match "CMAKE_PREFIX_PATH:STRING=$([regex]::Escape($ExpectedQtPath))")
+}
+
 function Invoke-Configure {
     param([string]$QtPath)
 
-    Write-Step "Configuring CMake..."
-    Write-Host "First configure builds FFmpeg via vcpkg. Qt is already downloaded as prebuilt binaries." -ForegroundColor Yellow
-
     $generator = Get-CMakeVisualStudioGenerator
-    $triplet = "x64-windows-release"
     $buildDir = Join-Path $Root "build"
     $toolchainFile = Join-Path $Root ".vcpkg\scripts\buildsystems\vcpkg.cmake"
 
-    Remove-StaleBuildCache -ExpectedGenerator $generator -ExpectedTriplet $triplet -ExpectedQtPath $QtPath
+    Remove-StaleBuildCache -ExpectedGenerator $generator -ExpectedTriplet $VcpkgTriplet -ExpectedQtPath $QtPath
+
+    if (Test-ConfigureUpToDate -ExpectedGenerator $generator -ExpectedTriplet $VcpkgTriplet -ExpectedQtPath $QtPath) {
+        Write-Ok "CMake already configured"
+        return
+    }
+
+    Write-Step "Configuring CMake..."
+    Write-Host "First configure builds FFmpeg via vcpkg. Qt is already downloaded as prebuilt binaries." -ForegroundColor Yellow
 
     cmake -S $Root -B $buildDir `
         -G $generator `
         -A x64 `
         -DCMAKE_TOOLCHAIN_FILE="$toolchainFile" `
-        -DVCPKG_TARGET_TRIPLET="$triplet" `
-        -DVCPKG_HOST_TRIPLET="$triplet" `
+        -DVCPKG_TARGET_TRIPLET="$VcpkgTriplet" `
+        -DVCPKG_HOST_TRIPLET="$VcpkgTriplet" `
         -DCMAKE_PREFIX_PATH="$QtPath"
     if ($LASTEXITCODE -ne 0) {
         throw "CMake configure failed."
@@ -305,7 +369,12 @@ function Invoke-Configure {
 }
 
 function Invoke-Build {
-    Write-Step "Building Nova Studio..."
+    if ($Force) {
+        Write-Step "Building Nova Studio (forced rebuild)..."
+    } else {
+        Write-Step "Building Nova Studio..."
+    }
+
     cmake --build (Join-Path $Root "build") --config Release -j
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed."
@@ -320,16 +389,88 @@ function Invoke-Tests {
     }
 }
 
+function Invoke-Deploy {
+    param([string]$QtPath)
+
+    $exe = Get-AppExe
+    $releaseDir = Get-ReleaseDir
+
+    if (-not (Test-Path $exe)) {
+        throw "Build output not found: $exe`nRun .\scripts\setup.ps1 without -DeployOnly first."
+    }
+
+    $platformPlugin = Join-Path $releaseDir "platforms\qwindows.dll"
+    $exeTime = (Get-Item $exe).LastWriteTimeUtc
+    $needsDeploy = $Force -or -not (Test-Path $platformPlugin)
+
+    if (-not $needsDeploy -and (Test-Path $platformPlugin)) {
+        $pluginTime = (Get-Item $platformPlugin).LastWriteTimeUtc
+        if ($exeTime -gt $pluginTime) {
+            $needsDeploy = $true
+        }
+    }
+
+    if (-not $needsDeploy) {
+        Write-Ok "Runtime libraries already deployed"
+        return
+    }
+
+    Write-Step "Deploying Qt and FFmpeg runtime libraries..."
+
+    $windeployqt = Join-Path $QtPath "bin\windeployqt.exe"
+    if (-not (Test-Path $windeployqt)) {
+        throw "windeployqt not found at $windeployqt"
+    }
+
+    & $windeployqt --release --no-translations --no-system-d3d-compiler $exe
+    if ($LASTEXITCODE -ne 0) {
+        throw "windeployqt failed."
+    }
+
+    $vcpkgBin = Join-Path $Root "build\vcpkg_installed\$VcpkgTriplet\bin"
+    if (Test-Path $vcpkgBin) {
+        Copy-Item (Join-Path $vcpkgBin "*.dll") $releaseDir -Force
+        Write-Ok "Copied FFmpeg runtime DLLs"
+    }
+}
+
+function Invoke-Run {
+    $exe = Get-AppExe
+    if (-not (Test-Path $exe)) {
+        throw "Cannot run app; executable not found at $exe"
+    }
+
+    & $exe
+}
+
 Write-Host @"
 
  Nova Studio - Windows setup
  -----------------------------
- One script does the heavy lifting:
-   1. Git, CMake, Python, and MSVC (if missing)
-   2. Prebuilt Qt download + FFmpeg via vcpkg
-   3. Configure, build, and optional tests
+ First run installs tools and downloads dependencies automatically.
+ Re-runs skip work that is already done.
 
 "@ -ForegroundColor Green
+
+if ($DeployOnly) {
+    $qtPath = Get-QtInstallPath
+    if (-not $qtPath) {
+        throw "Qt is not installed yet. Run .\scripts\setup.ps1 first."
+    }
+
+    Invoke-Deploy -QtPath $qtPath
+
+    if ($Run) {
+        Invoke-Run
+    } else {
+        Write-Host ""
+        Write-Host "Done! Run Nova Studio with:" -ForegroundColor Green
+        Write-Host "  .\build\Release\nova_studio.exe"
+        Write-Host "  .\scripts\run.ps1"
+        Write-Host ""
+    }
+    return
+}
 
 Ensure-Winget
 Ensure-Git
@@ -346,13 +487,15 @@ if (-not $SkipBuild) {
         Invoke-Tests
     }
 
-    $exe = Join-Path $Root "build\Release\nova_studio.exe"
+    Invoke-Deploy -QtPath $qtPath
+
     Write-Host ""
     Write-Host "Done! Run Nova Studio with:" -ForegroundColor Green
     Write-Host "  .\build\Release\nova_studio.exe"
+    Write-Host "  .\scripts\run.ps1"
     Write-Host ""
 
-    if ($Run -and (Test-Path $exe)) {
-        & $exe
+    if ($Run) {
+        Invoke-Run
     }
 }

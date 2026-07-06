@@ -28,9 +28,11 @@ Useful flags:
 
 ```powershell
 # Windows
-.\scripts\setup.ps1 -Run          # launch the app after build
+.\scripts\setup.ps1 -Run          # build, deploy DLLs, and launch
+.\scripts\run.ps1                 # launch only (after first setup)
+.\scripts\setup.ps1 -DeployOnly   # copy Qt/FFmpeg DLLs next to the exe
 .\scripts\setup.ps1 -SkipTests    # skip ctest
-.\scripts\setup.ps1 -SkipBuild    # deps + configure only
+.\scripts\setup.ps1 -Force          # force reconfigure/redeploy
 ```
 
 ```bash
