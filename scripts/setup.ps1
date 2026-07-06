@@ -389,6 +389,40 @@ function Invoke-Tests {
     }
 }
 
+function Get-QtPluginsSource {
+    $candidates = @(
+        (Join-Path $Root "build\vcpkg_installed\$VcpkgTriplet\Qt6\plugins")
+        (Join-Path $Root ".qt\$QtVersion\msvc2022_64\plugins")
+        (Join-Path $Root ".qt\Qt\$QtVersion\msvc2022_64\plugins")
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path (Join-Path $candidate "platforms\qwindows.dll")) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+
+    return $null
+}
+
+function Copy-QtPluginsFallback {
+    param([string]$ReleaseDir)
+
+    $pluginSource = Get-QtPluginsSource
+    if (-not $pluginSource) {
+        return $false
+    }
+
+    foreach ($pluginDir in Get-ChildItem $pluginSource -Directory) {
+        $dest = Join-Path $ReleaseDir $pluginDir.Name
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        Copy-Item (Join-Path $pluginDir.FullName "*") $dest -Force
+    }
+
+    Write-Ok "Copied Qt plugins from $pluginSource"
+    return $true
+}
+
 function Invoke-Deploy {
     param([string]$QtPath)
 
@@ -417,14 +451,24 @@ function Invoke-Deploy {
 
     Write-Step "Deploying Qt and FFmpeg runtime libraries..."
 
-    $windeployqt = Join-Path $QtPath "bin\windeployqt.exe"
-    if (-not (Test-Path $windeployqt)) {
-        throw "windeployqt not found at $windeployqt"
+    $deployed = $false
+    if ($QtPath) {
+        $windeployqt = Join-Path $QtPath "bin\windeployqt.exe"
+        if (Test-Path $windeployqt) {
+            & $windeployqt --release --no-translations --no-system-d3d-compiler $exe
+            if ($LASTEXITCODE -eq 0) {
+                $deployed = $true
+                Write-Ok "windeployqt completed"
+            }
+        }
     }
 
-    & $windeployqt --release --no-translations --no-system-d3d-compiler $exe
-    if ($LASTEXITCODE -ne 0) {
-        throw "windeployqt failed."
+    if (-not (Test-Path $platformPlugin)) {
+        $deployed = Copy-QtPluginsFallback -ReleaseDir $releaseDir
+    }
+
+    if (-not (Test-Path $platformPlugin)) {
+        throw "Failed to deploy Qt platform plugins. Run: git pull, then .\scripts\setup.ps1 -DeployOnly"
     }
 
     $vcpkgBin = Join-Path $Root "build\vcpkg_installed\$VcpkgTriplet\bin"
@@ -454,10 +498,6 @@ Write-Host @"
 
 if ($DeployOnly) {
     $qtPath = Get-QtInstallPath
-    if (-not $qtPath) {
-        throw "Qt is not installed yet. Run .\scripts\setup.ps1 first."
-    }
-
     Invoke-Deploy -QtPath $qtPath
 
     if ($Run) {

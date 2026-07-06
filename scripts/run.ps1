@@ -15,6 +15,9 @@ if (-not (Test-Path $Exe)) {
 if (-not (Test-Path $PlatformPlugin)) {
     Write-Host "Runtime libraries missing; deploying Qt/FFmpeg DLLs..." -ForegroundColor Yellow
     & (Join-Path $PSScriptRoot "setup.ps1") -DeployOnly
+    if (-not (Test-Path $PlatformPlugin)) {
+        throw "Deploy failed: platforms/qwindows.dll is still missing."
+    }
 }
 
 & $Exe
