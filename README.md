@@ -42,7 +42,7 @@ export queue, and the mobile/AI-module groundwork.
 **Option A   clone with Git (recommended, easiest to update later):**
 
 ```bash
-git clone https://github.com/VortexDQ/Nova-Studio/blob/main/README.md
+git clone https://github.com/VortexDQ/Nova-Studio.git
 cd nova-studio
 ```
 
