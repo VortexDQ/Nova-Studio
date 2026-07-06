@@ -152,21 +152,53 @@ function Ensure-Vcpkg {
     return $vcpkgDir
 }
 
+function Get-CMakeVisualStudioGenerator {
+    $help = cmake --help | Out-String
+
+    if ($help -match "Visual Studio 18 2026") {
+        return "Visual Studio 18 2026"
+    }
+
+    if ($help -match "Visual Studio 17 2022") {
+        return "Visual Studio 17 2022"
+    }
+
+    throw "No supported Visual Studio CMake generator was found. Install Visual Studio 2022/2026 Build Tools with the C++ workload, then re-run setup.ps1."
+}
+
 function Remove-StaleBuildCache {
+    param(
+        [string]$ExpectedGenerator,
+        [string]$ExpectedTriplet
+    )
+
     $buildDir = Join-Path $Root "build"
     $cacheFile = Join-Path $buildDir "CMakeCache.txt"
     if (-not (Test-Path $cacheFile)) {
         return
     }
 
-    $expectedGenerator = "Visual Studio 17 2022"
     $cache = Get-Content $cacheFile -Raw
+    $shouldRemove = $false
+
     if ($cache -match 'CMAKE_GENERATOR:INTERNAL=([^\r\n]+)') {
         $existingGenerator = $Matches[1].Trim()
-        if ($existingGenerator -ne $expectedGenerator) {
-            Write-Step "Removing stale build cache (was '$existingGenerator', need '$expectedGenerator')..."
-            Remove-Item -Recurse -Force $buildDir
+        if ($existingGenerator -ne $ExpectedGenerator) {
+            Write-Step "Removing stale build cache (was '$existingGenerator', need '$ExpectedGenerator')..."
+            $shouldRemove = $true
         }
+    }
+
+    if ($cache -match 'VCPKG_TARGET_TRIPLET:STRING=([^\r\n]+)') {
+        $existingTriplet = $Matches[1].Trim()
+        if ($existingTriplet -ne $ExpectedTriplet) {
+            Write-Step "Removing stale vcpkg cache (was '$existingTriplet', need '$ExpectedTriplet')..."
+            $shouldRemove = $true
+        }
+    }
+
+    if ($shouldRemove) {
+        Remove-Item -Recurse -Force $buildDir
     }
 }
 
@@ -175,9 +207,19 @@ function Invoke-Configure {
     Write-Host "First configure downloads and builds Qt + FFmpeg via vcpkg." -ForegroundColor Yellow
     Write-Host "That can take 30-60 minutes on a fresh machine - only happens once." -ForegroundColor Yellow
 
-    Remove-StaleBuildCache
+    $generator = Get-CMakeVisualStudioGenerator
+    $triplet = "x64-windows-release"
+    $buildDir = Join-Path $Root "build"
+    $toolchainFile = Join-Path $Root ".vcpkg\scripts\buildsystems\vcpkg.cmake"
 
-    cmake --preset windows
+    Remove-StaleBuildCache -ExpectedGenerator $generator -ExpectedTriplet $triplet
+
+    cmake -S $Root -B $buildDir `
+        -G $generator `
+        -A x64 `
+        -DCMAKE_TOOLCHAIN_FILE="$toolchainFile" `
+        -DVCPKG_TARGET_TRIPLET="$triplet" `
+        -DVCPKG_HOST_TRIPLET="$triplet"
     if ($LASTEXITCODE -ne 0) {
         throw "CMake configure failed."
     }
@@ -185,7 +227,7 @@ function Invoke-Configure {
 
 function Invoke-Build {
     Write-Step "Building Nova Studio..."
-    cmake --build --preset windows -j
+    cmake --build (Join-Path $Root "build") --config Release -j
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed."
     }
@@ -193,7 +235,7 @@ function Invoke-Build {
 
 function Invoke-Tests {
     Write-Step "Running tests..."
-    ctest --preset windows
+    ctest --test-dir (Join-Path $Root "build") -C Release --output-on-failure
     if ($LASTEXITCODE -ne 0) {
         throw "Tests failed."
     }

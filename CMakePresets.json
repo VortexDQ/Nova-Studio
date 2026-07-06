@@ -36,13 +36,31 @@
     },
     {
       "name": "windows",
-      "displayName": "Windows + vcpkg (Release)",
+      "displayName": "Windows + vcpkg Release (VS 2026)",
+      "inherits": "base",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "toolchainFile": "${sourceDir}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-release",
+        "VCPKG_HOST_TRIPLET": "x64-windows-release"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-vs2022",
+      "displayName": "Windows + vcpkg Release (VS 2022)",
       "inherits": "base",
       "generator": "Visual Studio 17 2022",
       "architecture": "x64",
       "toolchainFile": "${sourceDir}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-windows"
+        "VCPKG_TARGET_TRIPLET": "x64-windows-release",
+        "VCPKG_HOST_TRIPLET": "x64-windows-release"
       },
       "condition": {
         "type": "equals",
@@ -64,6 +82,11 @@
       "name": "windows",
       "configurePreset": "windows",
       "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2022",
+      "configurePreset": "windows-vs2022",
+      "configuration": "Release"
     }
   ],
   "testPresets": [
@@ -84,6 +107,14 @@
     {
       "name": "windows",
       "configurePreset": "windows",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-vs2022",
+      "configurePreset": "windows-vs2022",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true

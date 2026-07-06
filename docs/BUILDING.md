@@ -18,8 +18,9 @@ What the scripts do:
 
 - **Windows:** uses `winget` to install Git, CMake, and MSVC Build Tools when
   missing; clones vcpkg into `.vcpkg/`; installs Qt + FFmpeg from the repo's
-  `vcpkg.json` manifest; configures with the `windows` CMake preset; builds and
-  runs tests.
+  `vcpkg.json` manifest with the Release-only `x64-windows-release` triplet;
+  configures with the best available Visual Studio generator; builds and runs
+  tests.
 - **Linux/macOS:** installs system packages (apt or Homebrew), then configures
   with the `linux` or `macos` preset, builds, and runs tests.
 
@@ -41,6 +42,8 @@ Useful flags:
 
 **First Windows build note:** vcpkg compiles Qt from source on a fresh machine.
 Expect **30–60 minutes** once; incremental rebuilds are much faster afterward.
+Only Release dependencies are built, because Nova Studio's default Windows
+setup runs a Release build.
 
 ## Manual build (if you manage deps yourself)
 
@@ -97,7 +100,8 @@ ctest --preset windows
 
 Dependencies are declared in the repo-root `vcpkg.json`; CMake pulls them in
 automatically when you use the `windows` preset (no separate `vcpkg install`
-step).
+step). The default `windows` preset targets Visual Studio 2026; use
+`windows-vs2022` instead if your machine only has Visual Studio 2022.
 
 ## Build options
 
