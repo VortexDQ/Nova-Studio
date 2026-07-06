@@ -152,10 +152,30 @@ function Ensure-Vcpkg {
     return $vcpkgDir
 }
 
+function Remove-StaleBuildCache {
+    $buildDir = Join-Path $Root "build"
+    $cacheFile = Join-Path $buildDir "CMakeCache.txt"
+    if (-not (Test-Path $cacheFile)) {
+        return
+    }
+
+    $expectedGenerator = "Visual Studio 17 2022"
+    $cache = Get-Content $cacheFile -Raw
+    if ($cache -match 'CMAKE_GENERATOR:INTERNAL=([^\r\n]+)') {
+        $existingGenerator = $Matches[1].Trim()
+        if ($existingGenerator -ne $expectedGenerator) {
+            Write-Step "Removing stale build cache (was '$existingGenerator', need '$expectedGenerator')..."
+            Remove-Item -Recurse -Force $buildDir
+        }
+    }
+}
+
 function Invoke-Configure {
     Write-Step "Configuring CMake..."
     Write-Host "First configure downloads and builds Qt + FFmpeg via vcpkg." -ForegroundColor Yellow
     Write-Host "That can take 30-60 minutes on a fresh machine - only happens once." -ForegroundColor Yellow
+
+    Remove-StaleBuildCache
 
     cmake --preset windows
     if ($LASTEXITCODE -ne 0) {
