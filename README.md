@@ -35,17 +35,70 @@ slice to the full vision: multi-clip editing interactions (drag/blade/roll),
 audio pipeline, effect stacking, plugin SDK, proxy/background rendering,
 export queue, and the mobile/AI-module groundwork.
 
-## Building
+## Getting started
 
-See [`docs/BUILDING.md`](docs/BUILDING.md). Short version, on a machine with
-Qt 6 and FFmpeg dev packages installed:
+### 1. Get the code
+
+**Option A — clone with Git (recommended, easiest to update later):**
+
+```bash
+git clone https://github.com/<your-org>/nova-studio.git
+cd nova-studio
+```
+
+**Option B — download a ZIP (no Git required):**
+
+1. On the repo's GitHub page, click the green **Code** button → **Download ZIP**.
+2. Extract it (`unzip nova-studio-main.zip` on Linux/macOS, or right-click →
+   Extract All on Windows).
+3. Open a terminal in the extracted folder — the folder name may be
+   `nova-studio-main` rather than `nova-studio`; `cd` into whichever it is.
+
+**Option C — you already have a `nova-studio.tar.gz`:**
+
+```bash
+tar -xzf nova-studio.tar.gz
+cd nova-studio
+```
+
+### 2. Install dependencies
+
+Nova Studio needs a C++23 compiler, CMake, Qt 6, and FFmpeg's dev libraries.
+Full instructions for Linux, macOS, and Windows are in
+[`docs/BUILDING.md`](docs/BUILDING.md) — short version for Ubuntu/Debian:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y cmake qt6-base-dev libgl1-mesa-dev \
+    libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
+```
+
+### 3. Build
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
+```
+
+### 4. Test (optional, but a good sanity check on a fresh machine)
+
+```bash
 ctest --test-dir build --output-on-failure
+```
+
+### 5. Run
+
+```bash
 ./build/nova_studio
 ```
+
+Once it's open: **File → Import Media...** to load a clip, double-click it
+in the Media Library to send it to the timeline and preview, then hit
+**Play**. The Inspector panel's sliders (brightness/contrast/saturation)
+apply live via the GPU shader pipeline.
+
+If you're on a headless machine or a container with no display, see the
+"Running the app headless" section of [`docs/BUILDING.md`](docs/BUILDING.md).
 
 ## Architecture
 
