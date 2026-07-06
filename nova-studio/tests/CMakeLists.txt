@@ -1,0 +1,7 @@
+add_executable(nova_timeline_tests timeline_tests.cpp)
+target_link_libraries(nova_timeline_tests PRIVATE nova_timeline nova_core)
+add_test(NAME nova_timeline_tests COMMAND nova_timeline_tests)
+
+add_executable(nova_decoder_tests decoder_tests.cpp)
+target_link_libraries(nova_decoder_tests PRIVATE nova_media nova_core)
+add_test(NAME nova_decoder_tests COMMAND nova_decoder_tests)
