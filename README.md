@@ -5,20 +5,20 @@ written in modern C++23. This repository contains a **real, working
 vertical slice** of the full architecture described in
 [`docs/VISION.md`](docs/VISION.md) and [`docs/ROADMAP.md`](docs/ROADMAP.md):
 decode a video file, place it on a timeline, play it back, and grade it with
-a live GPU shader — all wired end to end, nothing mocked out.
+a live GPU shader   all wired end to end, nothing mocked out.
 
 > **Scope note.** A professional NLE that matches DaVinci Resolve or Premiere
 > feature-for-feature is a multi-year, multi-person engineering effort. This
 > repository is the architected foundation for that project: real modules,
-> real build system, real tests, a real running app — sized so it compiles
+> real build system, real tests, a real running app   sized so it compiles
 > and runs today, with a clear roadmap for the rest.
 
 ## What works right now
 
-- **Import** a video file (MP4/MOV/MKV/AVI/WebM — anything your FFmpeg build
+- **Import** a video file (MP4/MOV/MKV/AVI/WebM   anything your FFmpeg build
   demuxes) via the Media Library panel
 - **Decode** it through a real FFmpeg pipeline (`nova_media`)
-- **Place** it on a real timeline data model (`nova_timeline`) — tracks,
+- **Place** it on a real timeline data model (`nova_timeline`)   tracks,
   clips, ripple-trim, frame-accurate positioning
 - **Render** it through a real OpenGL 3.3 core-profile pipeline
   (`nova_renderer`) with a live GLSL brightness/contrast/saturation shader
@@ -39,22 +39,22 @@ export queue, and the mobile/AI-module groundwork.
 
 ### 1. Get the code
 
-**Option A — clone with Git (recommended, easiest to update later):**
+**Option A   clone with Git (recommended, easiest to update later):**
 
 ```bash
 git clone https://github.com/<your-org>/nova-studio.git
 cd nova-studio
 ```
 
-**Option B — download a ZIP (no Git required):**
+**Option B   download a ZIP (no Git required):**
 
 1. On the repo's GitHub page, click the green **Code** button → **Download ZIP**.
 2. Extract it (`unzip nova-studio-main.zip` on Linux/macOS, or right-click →
    Extract All on Windows).
-3. Open a terminal in the extracted folder — the folder name may be
+3. Open a terminal in the extracted folder   the folder name may be
    `nova-studio-main` rather than `nova-studio`; `cd` into whichever it is.
 
-**Option C — you already have a `nova-studio.tar.gz`:**
+**Option C   you already have a `nova-studio.tar.gz`:**
 
 ```bash
 tar -xzf nova-studio.tar.gz
@@ -65,7 +65,7 @@ cd nova-studio
 
 Nova Studio needs a C++23 compiler, CMake, Qt 6, and FFmpeg's dev libraries.
 Full instructions for Linux, macOS, and Windows are in
-[`docs/BUILDING.md`](docs/BUILDING.md) — short version for Ubuntu/Debian:
+[`docs/BUILDING.md`](docs/BUILDING.md)   short version for Ubuntu/Debian:
 
 ```bash
 sudo apt-get update
@@ -108,7 +108,7 @@ renderer / ui / playback / effects / audio / export / plugin / ...).
 
 ## License
 
-Apache License 2.0 — see [`LICENSE`](LICENSE). Qt 6 is used under LGPLv3 via
+Apache License 2.0   see [`LICENSE`](LICENSE). Qt 6 is used under LGPLv3 via
 dynamic linking; see [`docs/THIRD_PARTY_LICENSES.md`](docs/THIRD_PARTY_LICENSES.md).
 
 ## Contributing
