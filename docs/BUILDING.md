@@ -6,7 +6,45 @@ written to the same package names/flags but have not yet been build-verified
 in CI (see `docs/ROADMAP.md` Milestone 8) — please file an issue with any
 corrections.
 
-## Dependencies
+## One-command setup (easiest)
+
+| Platform | Command |
+|---|---|
+| **Windows** | `.\scripts\setup.ps1` |
+| **Linux (apt)** | `./scripts/setup.sh` |
+| **macOS (Homebrew)** | `./scripts/setup.sh` |
+
+What the scripts do:
+
+- **Windows:** uses `winget` to install Git, CMake, and MSVC Build Tools when
+  missing; clones vcpkg into `.vcpkg/`; installs Qt + FFmpeg from the repo's
+  `vcpkg.json` manifest; configures with the `windows` CMake preset; builds and
+  runs tests.
+- **Linux/macOS:** installs system packages (apt or Homebrew), then configures
+  with the `linux` or `macos` preset, builds, and runs tests.
+
+Useful flags:
+
+```powershell
+# Windows
+.\scripts\setup.ps1 -Run          # launch the app after build
+.\scripts\setup.ps1 -SkipTests    # skip ctest
+.\scripts\setup.ps1 -SkipBuild    # deps + configure only
+```
+
+```bash
+# Linux / macOS
+./scripts/setup.sh --run
+./scripts/setup.sh --skip-tests
+./scripts/setup.sh --skip-build
+```
+
+**First Windows build note:** vcpkg compiles Qt from source on a fresh machine.
+Expect **30–60 minutes** once; incremental rebuilds are much faster afterward.
+
+## Manual build (if you manage deps yourself)
+
+### Dependencies
 
 | Dependency | Debian/Ubuntu package | Notes |
 |---|---|---|
@@ -19,36 +57,47 @@ corrections.
 
 ### Linux (Debian/Ubuntu)
 
+Prefer `./scripts/setup.sh`. Manual equivalent:
+
 ```bash
 sudo apt-get update
-sudo apt-get install -y cmake qt6-base-dev libgl1-mesa-dev \
+sudo apt-get install -y build-essential cmake pkg-config qt6-base-dev libgl1-mesa-dev \
     libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
 
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j"$(nproc)"
-ctest --test-dir build --output-on-failure
+cmake --preset linux
+cmake --build --preset linux -j"$(nproc)"
+ctest --preset linux
 ./build/nova_studio
 ```
 
 ### macOS
 
+Prefer `./scripts/setup.sh`. Manual equivalent:
+
 ```bash
 brew install cmake qt ffmpeg pkg-config
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
-cmake --build build -j"$(sysctl -n hw.ncpu)"
-ctest --test-dir build --output-on-failure
+cmake --preset macos
+cmake --build --preset macos -j"$(sysctl -n hw.ncpu)"
+ctest --preset macos
 open build/nova_studio.app
 ```
 
-### Windows (MSVC + vcpkg)
+### Windows (MSVC + vcpkg manifest)
+
+Prefer `.\scripts\setup.ps1`. Manual equivalent:
 
 ```powershell
-vcpkg install qtbase[opengl] ffmpeg
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-cmake --build build --config Release -j
-ctest --test-dir build -C Release --output-on-failure
+git clone --depth 1 https://github.com/microsoft/vcpkg.git .vcpkg
+.\.vcpkg\bootstrap-vcpkg.bat -disableMetrics
+cmake --preset windows
+cmake --build --preset windows -j
+ctest --preset windows
 .\build\Release\nova_studio.exe
 ```
+
+Dependencies are declared in the repo-root `vcpkg.json`; CMake pulls them in
+automatically when you use the `windows` preset (no separate `vcpkg install`
+step).
 
 ## Build options
 

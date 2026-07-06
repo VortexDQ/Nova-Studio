@@ -37,60 +37,63 @@ export queue, and the mobile/AI-module groundwork.
 
 ## Getting started
 
-### 1. Get the code
+### Quick install (recommended)
 
-**Option A   clone with Git (recommended, easiest to update later):**
+**Windows** — open PowerShell in the project folder and run:
+
+```powershell
+.\scripts\setup.ps1
+```
+
+The script installs Git, CMake, and MSVC if they're missing, sets up a local
+vcpkg checkout, pulls Qt + FFmpeg automatically, then builds and tests the
+app. First run can take **30–60 minutes** while vcpkg compiles Qt; later
+builds are much faster.
+
+Add `-Run` to launch the app when the build finishes:
+
+```powershell
+.\scripts\setup.ps1 -Run
+```
+
+**Linux / macOS:**
+
+```bash
+chmod +x scripts/setup.sh   # once, if needed
+./scripts/setup.sh
+```
+
+On Ubuntu/Debian this installs apt packages for you. On macOS it uses
+Homebrew. Add `--run` to open the app after a successful build.
+
+### Manual install
+
+If you prefer to install dependencies yourself, or you're on a distro the
+script doesn't cover yet, see [`docs/BUILDING.md`](docs/BUILDING.md).
+
+Short version once deps are installed:
+
+```bash
+cmake --preset linux    # or macos / windows
+cmake --build --preset linux -j
+ctest --preset linux --output-on-failure
+./build/nova_studio
+```
+
+### Get the code
+
+**Option A — clone with Git (recommended):**
 
 ```bash
 git clone https://github.com/VortexDQ/Nova-Studio.git
-cd nova-studio
+cd Nova-Studio
 ```
 
-**Option B   download a ZIP (no Git required):**
+**Option B — download a ZIP (no Git required):**
 
 1. On the repo's GitHub page, click the green **Code** button → **Download ZIP**.
-2. Extract it (`unzip nova-studio-main.zip` on Linux/macOS, or right-click →
-   Extract All on Windows).
-3. Open a terminal in the extracted folder   the folder name may be
-   `nova-studio-main` rather than `nova-studio`; `cd` into whichever it is.
-
-**Option C   you already have a `nova-studio.tar.gz`:**
-
-```bash
-tar -xzf nova-studio.tar.gz
-cd nova-studio
-```
-
-### 2. Install dependencies
-
-Nova Studio needs a C++23 compiler, CMake, Qt 6, and FFmpeg's dev libraries.
-Full instructions for Linux, macOS, and Windows are in
-[`docs/BUILDING.md`](docs/BUILDING.md)   short version for Ubuntu/Debian:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y cmake qt6-base-dev libgl1-mesa-dev \
-    libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
-```
-
-### 3. Build
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-```
-
-### 4. Test (optional, but a good sanity check on a fresh machine)
-
-```bash
-ctest --test-dir build --output-on-failure
-```
-
-### 5. Run
-
-```bash
-./build/nova_studio
-```
+2. Extract it (right-click → Extract All on Windows, or `unzip` on Linux/macOS).
+3. Open a terminal in the extracted folder and run the setup script above.
 
 Once it's open: **File → Import Media...** to load a clip, double-click it
 in the Media Library to send it to the timeline and preview, then hit

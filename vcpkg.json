@@ -1,0 +1,16 @@
+{
+  "name": "nova-studio",
+  "version-string": "0.1.0",
+  "dependencies": [
+    {
+      "name": "qtbase",
+      "default-features": false,
+      "features": [
+        "widgets",
+        "opengl"
+      ]
+    },
+    "ffmpeg",
+    "pkgconf"
+  ]
+}
