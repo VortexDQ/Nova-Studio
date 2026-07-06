@@ -45,10 +45,10 @@ export queue, and the mobile/AI-module groundwork.
 .\scripts\setup.ps1
 ```
 
-The script installs Git, CMake, and MSVC if they're missing, sets up a local
-vcpkg checkout, pulls Qt + FFmpeg automatically, then builds and tests the
-app. First run can take **30–60 minutes** while vcpkg compiles Qt; later
-builds are much faster.
+The script installs Git, CMake, Python, and MSVC if they're missing, downloads
+prebuilt Qt binaries, uses vcpkg for FFmpeg only, then builds and tests the
+app. First run usually takes **10–20 minutes** (mostly Qt download + FFmpeg
+build); later builds are much faster.
 
 Add `-Run` to launch the app when the build finishes:
 

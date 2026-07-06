@@ -1,4 +1,5 @@
 /build/
+/.qt/
 /.vcpkg/
 /.vs/
 *.user

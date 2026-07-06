@@ -43,7 +43,8 @@
       "toolchainFile": "${sourceDir}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows-release",
-        "VCPKG_HOST_TRIPLET": "x64-windows-release"
+        "VCPKG_HOST_TRIPLET": "x64-windows-release",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.qt/6.8.3/msvc2022_64"
       },
       "condition": {
         "type": "equals",
@@ -60,7 +61,8 @@
       "toolchainFile": "${sourceDir}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows-release",
-        "VCPKG_HOST_TRIPLET": "x64-windows-release"
+        "VCPKG_HOST_TRIPLET": "x64-windows-release",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.qt/6.8.3/msvc2022_64"
       },
       "condition": {
         "type": "equals",

@@ -16,8 +16,8 @@ corrections.
 
 What the scripts do:
 
-- **Windows:** uses `winget` to install Git, CMake, and MSVC Build Tools when
-  missing; clones vcpkg into `.vcpkg/`; installs Qt + FFmpeg from the repo's
+- **Windows:** uses `winget` to install Git, CMake, Python, and MSVC Build Tools when
+  missing; downloads prebuilt Qt into `.qt/`; installs FFmpeg from the repo's
   `vcpkg.json` manifest with the Release-only `x64-windows-release` triplet;
   configures with the best available Visual Studio generator; builds and runs
   tests.
@@ -40,10 +40,10 @@ Useful flags:
 ./scripts/setup.sh --skip-build
 ```
 
-**First Windows build note:** vcpkg compiles Qt from source on a fresh machine.
-Expect **30–60 minutes** once; incremental rebuilds are much faster afterward.
-Only Release dependencies are built, because Nova Studio's default Windows
-setup runs a Release build.
+**First Windows build note:** the setup script downloads prebuilt Qt binaries
+instead of compiling Qt from source. FFmpeg still builds once via vcpkg on a
+fresh machine. Expect **10–20 minutes** once; incremental rebuilds are much
+faster afterward.
 
 ## Manual build (if you manage deps yourself)
 
@@ -85,23 +85,25 @@ ctest --preset macos
 open build/nova_studio.app
 ```
 
-### Windows (MSVC + vcpkg manifest)
+### Windows (prebuilt Qt + vcpkg FFmpeg)
 
 Prefer `.\scripts\setup.ps1`. Manual equivalent:
 
 ```powershell
 git clone --depth 1 https://github.com/microsoft/vcpkg.git .vcpkg
 .\.vcpkg\bootstrap-vcpkg.bat -disableMetrics
+python -m pip install aqtinstall
+python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -m qtopenglwidgets --outputdir .qt
 cmake --preset windows
 cmake --build --preset windows -j
 ctest --preset windows
 .\build\Release\nova_studio.exe
 ```
 
-Dependencies are declared in the repo-root `vcpkg.json`; CMake pulls them in
-automatically when you use the `windows` preset (no separate `vcpkg install`
-step). The default `windows` preset targets Visual Studio 2026; use
-`windows-vs2022` instead if your machine only has Visual Studio 2022.
+Dependencies are declared in the repo-root `vcpkg.json` (FFmpeg only); Qt is
+downloaded as prebuilt binaries into `.qt/`. The default `windows` preset
+targets Visual Studio 2026; use `windows-vs2022` instead if your machine only
+has Visual Studio 2022.
 
 ## Build options
 

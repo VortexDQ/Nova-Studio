@@ -3,11 +3,8 @@
   One-command setup and build for Nova Studio on Windows.
 
 .DESCRIPTION
-  Installs missing build tools (Git, CMake, MSVC) via winget when possible,
-  bootstraps a local vcpkg checkout, pulls Qt + FFmpeg from vcpkg.json,
-  then configures and builds the app.
-
-  First run can take 30-60 minutes while vcpkg compiles Qt.
+  Installs missing build tools (Git, CMake, MSVC, Python) via winget when possible,
+  downloads prebuilt Qt binaries, uses vcpkg for FFmpeg only, then builds the app.
 
 .EXAMPLE
   .\scripts\setup.ps1
@@ -26,6 +23,10 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Resolve-Path (Join-Path $ScriptDir "..")
 Set-Location $Root
+
+$QtVersion = "6.8.3"
+$QtArch = "win64_msvc2022_64"
+$QtModules = @("qtopenglwidgets")
 
 function Write-Step {
     param([string]$Message)
@@ -95,6 +96,19 @@ function Ensure-CMake {
     }
 }
 
+function Ensure-Python {
+    if (Test-Command python) {
+        return
+    }
+
+    Write-Step "Installing Python..."
+    Install-WingetPackage "Python.Python.3.12"
+
+    if (-not (Test-Command python)) {
+        throw "Python is still unavailable. Close this terminal, open a new one, and re-run setup.ps1."
+    }
+}
+
 function Get-VsInstallPath {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
     if (-not (Test-Path $vswhere)) {
@@ -126,6 +140,57 @@ MSVC was not detected after installation.
 Open 'x64 Native Tools Command Prompt for VS 2022' or restart your terminal, then re-run:
   .\scripts\setup.ps1
 "@
+    }
+
+    return $installed
+}
+
+function Get-QtInstallPath {
+    $candidates = @(
+        (Join-Path $Root ".qt\$QtVersion\msvc2022_64")
+        (Join-Path $Root ".qt\Qt\$QtVersion\msvc2022_64")
+    )
+
+    foreach ($candidate in $candidates) {
+        $config = Join-Path $candidate "lib\cmake\Qt6\Qt6Config.cmake"
+        if (Test-Path $config) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+
+    return $null
+}
+
+function Ensure-Qt {
+    $existing = Get-QtInstallPath
+    if ($existing) {
+        Write-Step "Using prebuilt Qt at $existing"
+        return $existing
+    }
+
+    Write-Step "Downloading prebuilt Qt $QtVersion (much faster than compiling from source)..."
+    Ensure-Python
+
+    python -m pip install --upgrade aqtinstall --quiet
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install aqtinstall."
+    }
+
+    $qtOutput = Join-Path $Root ".qt"
+    $moduleArgs = @()
+    foreach ($module in $QtModules) {
+        $moduleArgs += "-m"
+        $moduleArgs += $module
+    }
+
+    & python -m aqt install-qt windows desktop $QtVersion $QtArch --outputdir $qtOutput @moduleArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Qt download failed. Check your internet connection and re-run setup.ps1."
+    }
+
+    $installed = Get-QtInstallPath
+    if (-not $installed) {
+        throw "Qt install finished but Qt6Config.cmake was not found under .qt/."
     }
 
     return $installed
@@ -169,7 +234,8 @@ function Get-CMakeVisualStudioGenerator {
 function Remove-StaleBuildCache {
     param(
         [string]$ExpectedGenerator,
-        [string]$ExpectedTriplet
+        [string]$ExpectedTriplet,
+        [string]$ExpectedQtPath
     )
 
     $buildDir = Join-Path $Root "build"
@@ -197,29 +263,42 @@ function Remove-StaleBuildCache {
         }
     }
 
+    if ($cache -match 'CMAKE_PREFIX_PATH:STRING=([^\r\n]*)') {
+        $existingQtPath = $Matches[1].Trim()
+        if ($existingQtPath -ne $ExpectedQtPath) {
+            Write-Step "Removing stale Qt cache (was '$existingQtPath', need '$ExpectedQtPath')..."
+            $shouldRemove = $true
+        }
+    } else {
+        Write-Step "Removing stale build cache (missing prebuilt Qt path)..."
+        $shouldRemove = $true
+    }
+
     if ($shouldRemove) {
         Remove-Item -Recurse -Force $buildDir
     }
 }
 
 function Invoke-Configure {
+    param([string]$QtPath)
+
     Write-Step "Configuring CMake..."
-    Write-Host "First configure downloads and builds Qt + FFmpeg via vcpkg." -ForegroundColor Yellow
-    Write-Host "That can take 30-60 minutes on a fresh machine - only happens once." -ForegroundColor Yellow
+    Write-Host "First configure builds FFmpeg via vcpkg. Qt is already downloaded as prebuilt binaries." -ForegroundColor Yellow
 
     $generator = Get-CMakeVisualStudioGenerator
     $triplet = "x64-windows-release"
     $buildDir = Join-Path $Root "build"
     $toolchainFile = Join-Path $Root ".vcpkg\scripts\buildsystems\vcpkg.cmake"
 
-    Remove-StaleBuildCache -ExpectedGenerator $generator -ExpectedTriplet $triplet
+    Remove-StaleBuildCache -ExpectedGenerator $generator -ExpectedTriplet $triplet -ExpectedQtPath $QtPath
 
     cmake -S $Root -B $buildDir `
         -G $generator `
         -A x64 `
         -DCMAKE_TOOLCHAIN_FILE="$toolchainFile" `
         -DVCPKG_TARGET_TRIPLET="$triplet" `
-        -DVCPKG_HOST_TRIPLET="$triplet"
+        -DVCPKG_HOST_TRIPLET="$triplet" `
+        -DCMAKE_PREFIX_PATH="$QtPath"
     if ($LASTEXITCODE -ne 0) {
         throw "CMake configure failed."
     }
@@ -246,8 +325,8 @@ Write-Host @"
  Nova Studio - Windows setup
  -----------------------------
  One script does the heavy lifting:
-   1. Git, CMake, and MSVC (if missing)
-   2. Local vcpkg + Qt/FFmpeg from vcpkg.json
+   1. Git, CMake, Python, and MSVC (if missing)
+   2. Prebuilt Qt download + FFmpeg via vcpkg
    3. Configure, build, and optional tests
 
 "@ -ForegroundColor Green
@@ -256,8 +335,9 @@ Ensure-Winget
 Ensure-Git
 Ensure-CMake
 Ensure-MSVC | Out-Null
+$qtPath = Ensure-Qt
 Ensure-Vcpkg | Out-Null
-Invoke-Configure
+Invoke-Configure -QtPath $qtPath
 
 if (-not $SkipBuild) {
     Invoke-Build
