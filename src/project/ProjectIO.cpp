@@ -252,6 +252,9 @@ QJsonObject projectToJson(const Project& project) {
     }
     root["timelines"] = timelines;
     root["activeTimelineId"] = QString::fromStdString(project.activeTimelineId);
+    root["lastPlayheadSeconds"] = project.lastPlayheadSeconds;
+    root["lastPreviewMediaPath"] = QString::fromStdString(project.lastPreviewMediaPath);
+    root["selectedClipId"] = QString::fromStdString(project.selectedClipId);
     return root;
 }
 
@@ -279,6 +282,9 @@ std::unique_ptr<Project> projectFromJson(const QJsonObject& root) {
     }
 
     project->activeTimelineId = root["activeTimelineId"].toString().toStdString();
+    project->lastPlayheadSeconds = root["lastPlayheadSeconds"].toDouble(0.0);
+    project->lastPreviewMediaPath = root["lastPreviewMediaPath"].toString().toStdString();
+    project->selectedClipId = root["selectedClipId"].toString().toStdString();
     project->dirty = false;
     return project;
 }

@@ -15,4 +15,4 @@ own licenses:
   and the license texts for Qt and FFmpeg alongside your release.
 - If you enable any GPL-only FFmpeg components (e.g. certain filters or
   x264/x265 via `--enable-gpl --enable-libx264`), the resulting binary is
-  subject to GPL, not just LGPL — check before shipping.
+  subject to GPL, not just LGPL - check before shipping.

@@ -58,7 +58,7 @@ Run:
 ```
 
 **Something failed partway through**  
-Run again — the script picks up where it left off:
+Run again - the script picks up where it left off:
 ```powershell
 .\scripts\setup.ps1 -Run
 ```

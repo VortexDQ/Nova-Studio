@@ -34,7 +34,7 @@ nova_media  <---  nova_renderer  <---  nova_ui  <---  nova_studio (exe)
 `nova_core` has zero dependencies on anything else, so it (and eventually
 `nova_timeline`) can be reused by a future headless render-farm binary
 without pulling in Qt or FFmpeg. `nova_media` depends only on `nova_core` and
-FFmpeg — no Qt — so it can be unit-tested and eventually reused by a CLI
+FFmpeg - no Qt - so it can be unit-tested and eventually reused by a CLI
 batch-export tool.
 
 ## Data flow for the vertical slice

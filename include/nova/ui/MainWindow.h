@@ -1,10 +1,12 @@
 #pragma once
 
 #include <QElapsedTimer>
+#include <QKeyEvent>
 #include <QMainWindow>
 #include <QTimer>
 #include <memory>
 #include <optional>
+#include <string>
 
 #include "nova/media/Decoder.h"
 #include "nova/project/Project.h"
@@ -39,18 +41,22 @@ protected:
     void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private slots:
     void onNewProject();
     void onOpenProject();
     void onSaveProject();
     void onSaveProjectAs();
+    void onExportVideo();
     void onExportProjectCopy();
     void onShowVersionHistory();
     void onRecentProjectTriggered();
     void onImportMedia();
     void onImportMediaToFolder(const QString& folder);
+    void onMediaItemClicked();
     void onMediaItemActivated();
+    void onClipSelected(const QString& clipId, const QString& mediaPath);
     void onMediaSearchChanged();
     void onMediaFolderChanged();
     void onTimelineSelectionChanged(int index);
@@ -59,6 +65,7 @@ private slots:
     void onPlaybackTick();
     void onTimelineSeek(double seconds);
     void onSplitAtPlayhead();
+    void onDeleteSelectedClip();
     void onExtractAudio();
     void onVolumeChanged(int value);
     void onAutosaveTick();
@@ -72,12 +79,18 @@ private:
     void buildMenus();
     void applyTheme();
     void markDirty();
+    void captureSessionState();
     bool maybeSaveBeforeDiscard();
     bool saveProjectToPath(const QString& path, bool addToRecents);
     void applyProjectToUi();
+    void restoreProjectSession();
     void refreshMediaList();
-    void loadMediaIntoPreview(const QString& path);
-    void addClipToTimeline(const QString& path);
+    void refreshMediaMetadataFromFiles();
+    void showMediaMetadata(const QString& path);
+    void showClipMetadata(const nova::timeline::Clip& clip);
+    bool previewMediaFile(const QString& path, double seekSeconds);
+    bool previewImageFile(const QString& path);
+    void addMediaToTimeline(const QString& path);
     void syncAudioToCurrentTime();
     void updatePreviewEffects();
     void updateTitleOverlay();
@@ -85,8 +98,10 @@ private:
     nova::timeline::Track* findOrAddTitleTrack(nova::timeline::Timeline* timeline);
     const nova::timeline::Clip* findVideoClipAt(double seconds) const;
     const nova::timeline::Clip* findTitleClipAt(double seconds) const;
+    const nova::timeline::Clip* findClipById(const std::string& id) const;
     void importMediaFile(const QString& path, const QString& folder);
     QString ensureStockAsset(const QString& assetId);
+    QString formatBytes(int64_t bytes) const;
 
     nova::renderer::VideoPreviewWidget* preview_ = nullptr;
     PreviewOverlay* previewOverlay_ = nullptr;
@@ -100,6 +115,7 @@ private:
     QLabel* statusLabel_ = nullptr;
     QLabel* timeLabel_ = nullptr;
     QLabel* projectMetaLabel_ = nullptr;
+    QLabel* mediaMetaLabel_ = nullptr;
     QPushButton* playButton_ = nullptr;
     QPushButton* splitButton_ = nullptr;
     QPushButton* extractAudioButton_ = nullptr;
@@ -114,13 +130,10 @@ private:
     double currentTimeSeconds_ = 0.0;
     QString currentMediaPath_;
     QString pendingImportFolder_;
+    std::string selectedClipId_;
 
-    // Wall-clock master clock for A/V sync. Video frames are presented when
-    // the master clock reaches their PTS, keeping video locked to real time
-    // (and, when present, to the audio player) instead of drifting by decode
-    // latency. `pendingFrame_` holds a decoded-ahead frame not yet due.
     QElapsedTimer playbackClock_;
-    double playbackStartSeconds_ = 0.0;   // media time when playback (re)started
+    double playbackStartSeconds_ = 0.0;
     std::optional<nova::media::VideoFrame> pendingFrame_;
     double masterClockSeconds() const;
 };

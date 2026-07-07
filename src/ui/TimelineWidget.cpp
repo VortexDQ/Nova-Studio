@@ -14,6 +14,7 @@ using nova::timeline::TrackType;
 TimelineWidget::TimelineWidget(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(260);
     setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 void TimelineWidget::setTimeline(nova::timeline::Timeline* timeline) {
@@ -24,6 +25,36 @@ void TimelineWidget::setTimeline(nova::timeline::Timeline* timeline) {
 void TimelineWidget::setPlayheadSeconds(double seconds) {
     playheadSeconds_ = seconds;
     update();
+}
+
+void TimelineWidget::setSelectedClipId(const std::string& clipId) {
+    selectedClipId_ = clipId.empty() ? std::nullopt : std::optional<std::string>(clipId);
+    update();
+}
+
+QRect TimelineWidget::clipRect(const Clip& clip, TrackType type, int y) const {
+    if (!timeline_) return {};
+    const double fps = timeline_->frameRate() > 0 ? timeline_->frameRate() : 30.0;
+    const double startSec = clip.timelineStart / fps;
+    const double endSec = clip.timelineEnd / fps;
+    const int x = kHeaderWidth + static_cast<int>(startSec * pixelsPerSecond_);
+    const int w = std::max(2, static_cast<int>((endSec - startSec) * pixelsPerSecond_));
+    (void)type;
+    return QRect(x, y + 4, w, kTrackHeight - 8);
+}
+std::optional<TimelineWidget::HitClip> TimelineWidget::hitTestClip(const QPoint& pos) const {
+    if (!timeline_ || pos.x() < kHeaderWidth) return std::nullopt;
+
+    int y = 4;
+    for (const auto& track : timeline_->tracks()) {
+        for (const Clip& clip : track->clips()) {
+            if (clipRect(clip, track->type(), y).contains(pos)) {
+                return HitClip{clip.id, clip.mediaPath};
+            }
+        }
+        y += kTrackHeight + kTrackSpacing;
+    }
+    return std::nullopt;
 }
 
 void TimelineWidget::paintEvent(QPaintEvent*) {
@@ -37,7 +68,6 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
         return;
     }
 
-    const double fps = timeline_->frameRate() > 0 ? timeline_->frameRate() : 30.0;
     const int laneWidth = std::max(0, width() - kHeaderWidth);
     int y = 4;
 
@@ -60,22 +90,24 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
         QRect laneRect(kHeaderWidth, y, width() - kHeaderWidth, kTrackHeight);
         painter.fillRect(laneRect, track->type() == TrackType::Video
                                         ? QColor(19, 22, 29)
-                                        : QColor(17, 26, 24));
+                                        : track->type() == TrackType::Subtitle
+                                              ? QColor(24, 22, 18)
+                                              : QColor(17, 26, 24));
 
         for (const Clip& clip : track->clips()) {
-            double startSec = clip.timelineStart / fps;
-            double endSec = clip.timelineEnd / fps;
-            int x = kHeaderWidth + static_cast<int>(startSec * pixelsPerSecond_);
-            int w = std::max(2, static_cast<int>((endSec - startSec) * pixelsPerSecond_));
+            QRect clipRect = this->clipRect(clip, track->type(), y);
+            const bool selected = selectedClipId_ && *selectedClipId_ == clip.id;
 
-            QRect clipRect(x, y + 4, w, kTrackHeight - 8);
             QColor clipColor = track->type() == TrackType::Video
                                     ? QColor(64, 105, 210)
                                     : track->type() == TrackType::Subtitle
                                           ? QColor(210, 130, 50)
                                           : QColor(46, 168, 125);
+            if (selected) clipColor = clipColor.lighter(130);
+
             painter.setBrush(clipColor);
-            painter.setPen(QPen(clipColor.lighter(125), 1));
+            painter.setPen(QPen(selected ? QColor(255, 220, 120) : clipColor.lighter(125),
+                                selected ? 2 : 1));
             painter.drawRoundedRect(clipRect, 4, 4);
 
             if (track->type() == TrackType::Audio) {
@@ -97,15 +129,23 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
         y += kTrackHeight + kTrackSpacing;
     }
 
-    // Playhead
-    int playheadX = kHeaderWidth + static_cast<int>(playheadSeconds_ * pixelsPerSecond_);
+    const int playheadX = kHeaderWidth + static_cast<int>(playheadSeconds_ * pixelsPerSecond_);
     painter.setPen(QPen(QColor(230, 90, 60), 2));
     painter.drawLine(playheadX, 0, playheadX, height());
 }
 
 void TimelineWidget::mousePressEvent(QMouseEvent* event) {
     if (event->pos().x() < kHeaderWidth) return;
-    double seconds = (event->pos().x() - kHeaderWidth) / pixelsPerSecond_;
+
+    if (const auto hit = hitTestClip(event->pos())) {
+        selectedClipId_ = hit->id;
+        update();
+        emit clipSelected(QString::fromStdString(hit->id),
+                          QString::fromStdString(hit->mediaPath));
+        return;
+    }
+
+    const double seconds = (event->pos().x() - kHeaderWidth) / pixelsPerSecond_;
     emit seekRequested(std::max(0.0, seconds));
 }
 

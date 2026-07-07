@@ -43,6 +43,11 @@ struct Project {
     std::string filePath;
     bool dirty = false;
 
+    // Restored on project open so the editor picks up where you left off.
+    double lastPlayheadSeconds = 0.0;
+    std::string lastPreviewMediaPath;
+    std::string selectedClipId;
+
     nova::timeline::Timeline* activeTimeline();
     const nova::timeline::Timeline* activeTimeline() const;
 

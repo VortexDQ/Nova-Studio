@@ -107,7 +107,7 @@ run_app() {
 
 cat <<'EOF'
 
- Nova Studio — setup
+ Nova Studio - setup
  -------------------
  Installs dependencies, configures, builds, and optionally runs tests.
 

@@ -56,9 +56,11 @@ target_link_libraries(nova_project PUBLIC nova_core nova_timeline Qt6::Core)
 add_library(nova_media STATIC
     src/media/Decoder.cpp
     src/media/AudioExtractor.cpp
+    src/media/MediaProbe.cpp
+    src/media/VideoExporter.cpp
 )
 target_include_directories(nova_media PUBLIC ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(nova_media PUBLIC nova_core PkgConfig::FFMPEG)
+target_link_libraries(nova_media PUBLIC nova_core PkgConfig::FFMPEG Qt6::Gui)
 
 # --- nova_renderer: Qt OpenGL preview widget + shader effect pipeline ---
 add_library(nova_renderer STATIC

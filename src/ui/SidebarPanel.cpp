@@ -113,7 +113,7 @@ QWidget* SidebarPanel::makeMediaPage() {
     mediaList_ = new QListWidget(page);
     layout->addWidget(mediaList_, 1);
 
-    layout->addWidget(new QLabel(tr("Double-click a clip to load it on the timeline."), page));
+    layout->addWidget(new QLabel(tr("Click to preview. Double-click to add to timeline."), page));
     return page;
 }
 
@@ -229,15 +229,15 @@ QWidget* SidebarPanel::makeTemplatesPage() {
 
 void SidebarPanel::populateTextPresets() {
     const struct { const char* id; const char* label; const char* text; } presets[] = {
-        {"lower-third-minimal", "Lower third — Minimal", "Your name here"},
-        {"lower-third-broadcast", "Lower third — Broadcast", "Segment title"},
+        {"lower-third-minimal", "Lower third - Minimal", "Your name here"},
+        {"lower-third-broadcast", "Lower third - Broadcast", "Segment title"},
         {"quote", "Quote", "Your quote here"},
         {"rating", "Rating stars", "Product name"},
         {"credits", "Rolling credits", "Directed by You"},
         {"timer", "Timer", "01:00"},
         {"meme", "Meme top/bottom", "TOP TEXT / BOTTOM TEXT"},
-        {"intro-clean", "Intro — Clean", "My Video"},
-        {"outro-stamp", "Outro — Stamp", "Thanks for watching"},
+        {"intro-clean", "Intro - Clean", "My Video"},
+        {"outro-stamp", "Outro - Stamp", "Thanks for watching"},
     };
     for (const auto& p : presets) {
         auto* item = new QListWidgetItem(tr(p.label), textPresetList_);

@@ -39,7 +39,7 @@ export queue, and the mobile/AI-module groundwork.
 
 ### Quick install (recommended)
 
-**Windows** — open PowerShell in the project folder and run:
+**Windows** - open PowerShell in the project folder and run:
 
 ```powershell
 .\scripts\setup.ps1 -Run
@@ -84,14 +84,14 @@ ctest --preset linux --output-on-failure
 
 ### Get the code
 
-**Option A — clone with Git (recommended):**
+**Option A - clone with Git (recommended):**
 
 ```bash
 git clone https://github.com/VortexDQ/Nova-Studio.git
 cd Nova-Studio
 ```
 
-**Option B — download a ZIP (no Git required):**
+**Option B - download a ZIP (no Git required):**
 
 1. On the repo's GitHub page, click the green **Code** button → **Download ZIP**.
 2. Extract it (right-click → Extract All on Windows, or `unzip` on Linux/macOS).

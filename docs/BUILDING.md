@@ -3,7 +3,7 @@
 Verified on **Ubuntu 24.04 (noble), GCC 13.3, Qt 6.4, FFmpeg 6.1** as part of
 this repository's own development. Windows/macOS instructions below are
 written to the same package names/flags but have not yet been build-verified
-in CI (see `docs/ROADMAP.md` Milestone 8) — please file an issue with any
+in CI (see `docs/ROADMAP.md` Milestone 8) - please file an issue with any
 corrections.
 
 ## One-command setup (easiest)
@@ -128,8 +128,8 @@ DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./build/nova_studio
 
 - `Could NOT find PkgConfig` → install `pkg-config` (Linux) or `pkgconf`
   (macOS/Homebrew).
-- `Found libavcodec ... too old` — pin to FFmpeg ≥ 5.0; earlier versions
+- `Found libavcodec ... too old` - pin to FFmpeg ≥ 5.0; earlier versions
   are missing APIs `nova_media` depends on.
-- Blank/black preview after Import — check the app's stdout log; `Decoder`
+- Blank/black preview after Import - check the app's stdout log; `Decoder`
   logs the specific FFmpeg error (unsupported codec, corrupt file, etc.) via
   `nova_core`'s logger rather than failing silently.
