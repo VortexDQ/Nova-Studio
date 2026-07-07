@@ -683,6 +683,8 @@ void MainWindow::loadMediaIntoPreview(const QString& path) {
     playbackTimer_.stop();
     playing_ = false;
     playButton_->setText(tr("Play"));
+    pendingFrame_.reset();
+    playbackStartSeconds_ = 0.0;
     if (audioPlayer_) audioPlayer_->stop();
 
     if (!decoder_->open(path.toStdString())) {
@@ -758,6 +760,18 @@ void MainWindow::addClipToTimeline(const QString& path) {
     }
 }
 
+double MainWindow::masterClockSeconds() const {
+    // Prefer the audio player's real position as the master clock so video
+    // is slaved to audio (the canonical A/V-sync arrangement). Fall back to a
+    // wall-clock elapsed timer for silent clips.
+    if (audioPlayer_ && decoder_->info().hasAudio
+        && audioPlayer_->playbackState() == QMediaPlayer::PlayingState) {
+        return audioPlayer_->position() / 1000.0;
+    }
+    if (!playbackClock_.isValid()) return currentTimeSeconds_;
+    return playbackStartSeconds_ + playbackClock_.elapsed() / 1000.0;
+}
+
 void MainWindow::onPlayPauseClicked() {
     if (!decoder_->isOpen()) return;
 
@@ -769,8 +783,13 @@ void MainWindow::onPlayPauseClicked() {
         if (audioPlayer_ && decoder_->info().hasAudio) {
             audioPlayer_->play();
         }
-        const double intervalMs = 1000.0 / std::max(1.0, decoder_->info().frameRate);
-        playbackTimer_.start(static_cast<int>(intervalMs));
+        // Anchor the master clock to the current media time.
+        playbackStartSeconds_ = currentTimeSeconds_;
+        playbackClock_.restart();
+        pendingFrame_.reset();
+        // Tick well above the frame rate so we can present frames precisely
+        // when they come due rather than one-frame-per-tick.
+        playbackTimer_.start(5);
     } else {
         playbackTimer_.stop();
         if (audioPlayer_) audioPlayer_->pause();
@@ -778,10 +797,46 @@ void MainWindow::onPlayPauseClicked() {
 }
 
 void MainWindow::onPlaybackTick() {
-    auto frame = decoder_->nextFrame();
-    if (!frame) {
+    const double target = masterClockSeconds();
+
+    // Present the latest frame whose PTS is at or before the master clock,
+    // decoding ahead and dropping frames that fell behind. Hold the current
+    // frame if the next decoded one isn't due yet.
+    std::optional<nova::media::VideoFrame> toShow;
+    bool reachedEnd = false;
+
+    while (true) {
+        if (!pendingFrame_) {
+            pendingFrame_ = decoder_->nextFrame();
+            if (!pendingFrame_) {
+                reachedEnd = true;
+                break;
+            }
+        }
+        if (pendingFrame_->timeSeconds <= target) {
+            toShow = std::move(pendingFrame_);
+            pendingFrame_.reset();
+            // Keep draining until we reach a frame that's still in the future,
+            // so we drop stale frames instead of falling behind.
+            continue;
+        }
+        break; // next frame not due yet
+    }
+
+    if (reachedEnd && !toShow) {
+        // Loop back to the start, restarting both clocks in lock-step.
         decoder_->seek(0.0);
-        frame = decoder_->nextFrame();
+        pendingFrame_.reset();
+        currentTimeSeconds_ = 0.0;
+        playbackStartSeconds_ = 0.0;
+        playbackClock_.restart();
+        if (audioPlayer_ && decoder_->info().hasAudio) {
+            audioPlayer_->setPosition(0);
+            audioPlayer_->play();
+        } else if (audioPlayer_) {
+            audioPlayer_->stop();
+        }
+        auto frame = decoder_->nextFrame();
         if (!frame) {
             playbackTimer_.stop();
             if (audioPlayer_) audioPlayer_->stop();
@@ -789,9 +844,13 @@ void MainWindow::onPlaybackTick() {
             playButton_->setText(tr("Play"));
             return;
         }
+        toShow = std::move(frame);
     }
-    preview_->setFrame(*frame);
-    currentTimeSeconds_ = frame->timeSeconds;
+
+    if (!toShow) return; // nothing due this tick; hold current frame
+
+    preview_->setFrame(*toShow);
+    currentTimeSeconds_ = toShow->timeSeconds;
     timelineWidget_->setPlayheadSeconds(currentTimeSeconds_);
     timeLabel_->setText(tr("%1s").arg(currentTimeSeconds_, 0, 'f', 2));
     updatePreviewEffects();
@@ -803,6 +862,7 @@ void MainWindow::onTimelineSeek(double seconds) {
     const bool wasPlaying = playing_;
     if (audioPlayer_) audioPlayer_->pause();
     decoder_->seek(seconds);
+    pendingFrame_.reset();
     if (auto frame = decoder_->nextFrame()) {
         preview_->setFrame(*frame);
         currentTimeSeconds_ = frame->timeSeconds;
@@ -811,6 +871,10 @@ void MainWindow::onTimelineSeek(double seconds) {
         syncAudioToCurrentTime();
         updatePreviewEffects();
         updateTitleOverlay();
+        // Re-anchor the master clock to the new position so playback resumes
+        // in sync rather than jumping by the seek delta.
+        playbackStartSeconds_ = currentTimeSeconds_;
+        playbackClock_.restart();
         if (wasPlaying && audioPlayer_ && decoder_->info().hasAudio) {
             audioPlayer_->play();
         }

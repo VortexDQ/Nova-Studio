@@ -1,8 +1,10 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QMainWindow>
 #include <QTimer>
 #include <memory>
+#include <optional>
 
 #include "nova/media/Decoder.h"
 #include "nova/project/Project.h"
@@ -112,6 +114,15 @@ private:
     double currentTimeSeconds_ = 0.0;
     QString currentMediaPath_;
     QString pendingImportFolder_;
+
+    // Wall-clock master clock for A/V sync. Video frames are presented when
+    // the master clock reaches their PTS, keeping video locked to real time
+    // (and, when present, to the audio player) instead of drifting by decode
+    // latency. `pendingFrame_` holds a decoded-ahead frame not yet due.
+    QElapsedTimer playbackClock_;
+    double playbackStartSeconds_ = 0.0;   // media time when playback (re)started
+    std::optional<nova::media::VideoFrame> pendingFrame_;
+    double masterClockSeconds() const;
 };
 
 } // namespace nova::ui
