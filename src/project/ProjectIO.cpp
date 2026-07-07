@@ -68,6 +68,21 @@ QJsonObject clipToJson(const nova::timeline::Clip& clip) {
     if (clip.linkedClipId) {
         obj["linkedClipId"] = QString::fromStdString(*clip.linkedClipId);
     }
+    if (!clip.overlayText.empty()) {
+        obj["overlayText"] = QString::fromStdString(clip.overlayText);
+    }
+    if (!clip.stylePreset.empty()) {
+        obj["stylePreset"] = QString::fromStdString(clip.stylePreset);
+    }
+    if (!clip.transitionIn.empty()) {
+        obj["transitionIn"] = QString::fromStdString(clip.transitionIn);
+    }
+    if (!clip.transitionOut.empty()) {
+        obj["transitionOut"] = QString::fromStdString(clip.transitionOut);
+    }
+    if (clip.transitionDurationSec != 0.5) {
+        obj["transitionDurationSec"] = clip.transitionDurationSec;
+    }
     return obj;
 }
 
@@ -94,6 +109,11 @@ bool clipFromJson(const QJsonObject& obj, nova::timeline::Clip& clip) {
     } else {
         clip.linkedClipId.reset();
     }
+    clip.overlayText = obj["overlayText"].toString().toStdString();
+    clip.stylePreset = obj["stylePreset"].toString().toStdString();
+    clip.transitionIn = obj["transitionIn"].toString().toStdString();
+    clip.transitionOut = obj["transitionOut"].toString().toStdString();
+    clip.transitionDurationSec = obj["transitionDurationSec"].toDouble(0.5);
     return true;
 }
 

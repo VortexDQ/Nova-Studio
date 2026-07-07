@@ -74,10 +74,12 @@ add_library(nova_ui STATIC
     src/ui/TimelineWidget.cpp
     src/ui/SidebarPanel.cpp
     src/ui/ProjectWelcomeDialog.cpp
+    src/ui/PreviewOverlay.cpp
     include/nova/ui/MainWindow.h
     include/nova/ui/TimelineWidget.h
     include/nova/ui/SidebarPanel.h
     include/nova/ui/ProjectWelcomeDialog.h
+    include/nova/ui/PreviewOverlay.h
 )
 target_include_directories(nova_ui PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(nova_ui PUBLIC nova_core nova_timeline nova_project nova_media nova_renderer Qt6::Widgets Qt6::OpenGLWidgets Qt6::Multimedia)

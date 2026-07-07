@@ -13,7 +13,6 @@ class QLabel;
 class QPushButton;
 class QAudioOutput;
 class QMediaPlayer;
-class QListWidget;
 
 namespace nova::renderer { class VideoPreviewWidget; }
 
@@ -21,6 +20,7 @@ namespace nova::ui {
 
 class TimelineWidget;
 class SidebarPanel;
+class PreviewOverlay;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -35,6 +35,8 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onNewProject();
@@ -45,6 +47,7 @@ private slots:
     void onShowVersionHistory();
     void onRecentProjectTriggered();
     void onImportMedia();
+    void onImportMediaToFolder(const QString& folder);
     void onMediaItemActivated();
     void onMediaSearchChanged();
     void onMediaFolderChanged();
@@ -58,6 +61,9 @@ private slots:
     void onVolumeChanged(int value);
     void onAutosaveTick();
     void onTemplateActivated(const QString& templatePath);
+    void onTextPresetActivated(const QString& presetId, const QString& defaultText);
+    void onTransitionActivated(const QString& transitionId);
+    void onLibraryAssetActivated(const QString& assetId);
 
 private:
     void buildDockPanels();
@@ -71,9 +77,17 @@ private:
     void loadMediaIntoPreview(const QString& path);
     void addClipToTimeline(const QString& path);
     void syncAudioToCurrentTime();
+    void updatePreviewEffects();
+    void updateTitleOverlay();
     nova::timeline::Timeline* activeTimeline();
+    nova::timeline::Track* findOrAddTitleTrack(nova::timeline::Timeline* timeline);
+    const nova::timeline::Clip* findVideoClipAt(double seconds) const;
+    const nova::timeline::Clip* findTitleClipAt(double seconds) const;
+    void importMediaFile(const QString& path, const QString& folder);
+    QString ensureStockAsset(const QString& assetId);
 
     nova::renderer::VideoPreviewWidget* preview_ = nullptr;
+    PreviewOverlay* previewOverlay_ = nullptr;
     TimelineWidget* timelineWidget_ = nullptr;
     SidebarPanel* sidebar_ = nullptr;
     QComboBox* timelineSelector_ = nullptr;
@@ -97,6 +111,7 @@ private:
     bool playing_ = false;
     double currentTimeSeconds_ = 0.0;
     QString currentMediaPath_;
+    QString pendingImportFolder_;
 };
 
 } // namespace nova::ui

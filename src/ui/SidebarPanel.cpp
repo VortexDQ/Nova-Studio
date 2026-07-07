@@ -6,42 +6,43 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFrame>
+#include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPushButton>
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
 
 namespace nova::ui {
 
-namespace {
-
-QToolButton* makeCategoryButton(const QString& text, const QString& glyph, QWidget* parent) {
-    auto* button = new QToolButton(parent);
-    button->setText(text + "\n" + glyph);
-    button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    button->setCheckable(true);
-    button->setAutoRaise(true);
-    button->setFixedWidth(72);
-    button->setMinimumHeight(72);
-    return button;
-}
-
-} // namespace
-
 SidebarPanel::SidebarPanel(QWidget* parent) : QWidget(parent) {
     buildUi();
 }
 
-QWidget* SidebarPanel::mediaPage() const { return stack_->widget(0); }
 QListWidget* SidebarPanel::mediaList() const { return mediaList_; }
 QLineEdit* SidebarPanel::mediaSearch() const { return mediaSearch_; }
 QComboBox* SidebarPanel::mediaFolderFilter() const { return mediaFolderFilter_; }
 QListWidget* SidebarPanel::templateList() const { return templateList_; }
 QListWidget* SidebarPanel::textPresetList() const { return textPresetList_; }
 QListWidget* SidebarPanel::transitionList() const { return transitionList_; }
+
+QToolButton* SidebarPanel::addRailButton(const QString& label, int index,
+                                         QVBoxLayout* railLayout) {
+    auto* button = new QToolButton(this);
+    button->setText(label);
+    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    button->setCheckable(true);
+    button->setAutoRaise(true);
+    button->setFixedWidth(68);
+    button->setMinimumHeight(48);
+    button->setFont(QFont(QStringLiteral("Segoe UI"), 8, QFont::DemiBold));
+    categoryGroup_->addButton(button, index);
+    railLayout->addWidget(button);
+    return button;
+}
 
 void SidebarPanel::buildUi() {
     auto* root = new QHBoxLayout(this);
@@ -50,47 +51,30 @@ void SidebarPanel::buildUi() {
 
     auto* rail = new QFrame(this);
     rail->setObjectName("sidebarRail");
-    rail->setFixedWidth(80);
+    rail->setFixedWidth(72);
     auto* railLayout = new QVBoxLayout(rail);
-    railLayout->setContentsMargins(4, 8, 4, 8);
-    railLayout->setSpacing(4);
+    railLayout->setContentsMargins(2, 6, 2, 6);
+    railLayout->setSpacing(2);
 
     categoryGroup_ = new QButtonGroup(this);
     stack_ = new QStackedWidget(this);
 
-    const struct Category {
-        const char* label;
-        const char* icon;
-        QWidget* (SidebarPanel::*factory)();
-    } categories[] = {
-        {"Media", "📁", &SidebarPanel::makeMediaPage},
-        {"Record", "🎥", nullptr},
-        {"Library", "🎬", nullptr},
-        {"Templates", "▦", &SidebarPanel::makeTemplatesPage},
-        {"Text", "T", &SidebarPanel::makeTextPage},
-        {"Transitions", "↔", &SidebarPanel::makeTransitionsPage},
-    };
+    addRailButton(tr("Media"), 0, railLayout);
+    stack_->addWidget(makeMediaPage());
+    addRailButton(tr("Import"), 1, railLayout);
+    stack_->addWidget(makeRecordPage());
+    addRailButton(tr("Stock"), 2, railLayout);
+    stack_->addWidget(makeLibraryPage());
+    addRailButton(tr("Templ"), 3, railLayout);
+    stack_->addWidget(makeTemplatesPage());
+    addRailButton(tr("Text"), 4, railLayout);
+    stack_->addWidget(makeTextPage());
+    addRailButton(tr("Trans"), 5, railLayout);
+    stack_->addWidget(makeTransitionsPage());
 
-    int index = 0;
-    for (const auto& category : categories) {
-        auto* button = makeCategoryButton(tr(category.label), QString::fromUtf8(category.icon), rail);
-        categoryGroup_->addButton(button, index);
-        railLayout->addWidget(button);
-
-        if (category.factory) {
-            stack_->addWidget((this->*category.factory)());
-        } else {
-            stack_->addWidget(makePlaceholderPage(
-                tr(category.label),
-                tr("Coming in a future milestone. Offline projects work locally today.")));
-        }
-        ++index;
-    }
     railLayout->addStretch();
 
     connect(categoryGroup_, &QButtonGroup::idClicked, stack_, &QStackedWidget::setCurrentIndex);
-    connect(categoryGroup_, &QButtonGroup::idClicked, this, &SidebarPanel::categoryChanged);
-
     if (auto* first = categoryGroup_->button(0)) {
         first->setChecked(true);
     }
@@ -99,22 +83,21 @@ void SidebarPanel::buildUi() {
     root->addWidget(stack_, 1);
 }
 
-QWidget* SidebarPanel::makePlaceholderPage(const QString& title, const QString& description) {
-    auto* page = new QWidget(this);
-    auto* layout = new QVBoxLayout(page);
-    layout->addWidget(new QLabel("<b>" + title + "</b>", page));
-    layout->addWidget(new QLabel(description, page));
-    layout->addStretch();
-    return page;
-}
-
 QWidget* SidebarPanel::makeMediaPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->addWidget(new QLabel(tr("<b>My Media</b>"), page));
+    layout->setContentsMargins(10, 10, 10, 10);
+
+    auto* header = new QLabel(tr("My media"), page);
+    header->setStyleSheet("font-size: 13pt; font-weight: 600;");
+    layout->addWidget(header);
+
+    auto* importBtn = new QPushButton(tr("+ Import file"), page);
+    connect(importBtn, &QPushButton::clicked, this, &SidebarPanel::importMediaRequested);
+    layout->addWidget(importBtn);
 
     mediaSearch_ = new QLineEdit(page);
-    mediaSearch_->setPlaceholderText(tr("Search media, tags, folders..."));
+    mediaSearch_->setPlaceholderText(tr("Search by name or tag"));
     layout->addWidget(mediaSearch_);
 
     mediaFolderFilter_ = new QComboBox(page);
@@ -124,18 +107,83 @@ QWidget* SidebarPanel::makeMediaPage() {
     mediaFolderFilter_->addItem(tr("Camera"), QStringLiteral("Camera"));
     mediaFolderFilter_->addItem(tr("Drone"), QStringLiteral("Drone"));
     mediaFolderFilter_->addItem(tr("Mobile"), QStringLiteral("Mobile"));
+    mediaFolderFilter_->addItem(tr("Stock"), QStringLiteral("Stock"));
     layout->addWidget(mediaFolderFilter_);
 
     mediaList_ = new QListWidget(page);
     layout->addWidget(mediaList_, 1);
+
+    layout->addWidget(new QLabel(tr("Double-click a clip to load it on the timeline."), page));
+    return page;
+}
+
+QWidget* SidebarPanel::makeRecordPage() {
+    auto* page = new QWidget(this);
+    auto* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(10, 10, 10, 10);
+
+    auto* header = new QLabel(tr("Import sources"), page);
+    header->setStyleSheet("font-size: 13pt; font-weight: 600;");
+    layout->addWidget(header);
+    layout->addWidget(new QLabel(tr("Bring footage in from your device. Pick a source type:"), page));
+
+    auto addImport = [&](const QString& label, const QString& folder) {
+        auto* btn = new QPushButton(label, page);
+        connect(btn, &QPushButton::clicked, this, [this, folder]() {
+            emit importMediaToFolder(folder);
+        });
+        layout->addWidget(btn);
+    };
+
+    addImport(tr("Import video file…"), QStringLiteral("Imports"));
+    addImport(tr("Import screen recording…"), QStringLiteral("Screen recordings"));
+    addImport(tr("Import camera clip…"), QStringLiteral("Camera"));
+    addImport(tr("Import drone footage…"), QStringLiteral("Drone"));
+    addImport(tr("Import phone video…"), QStringLiteral("Mobile"));
+    addImport(tr("Import audio…"), QStringLiteral("Imports"));
+    addImport(tr("Import image…"), QStringLiteral("Imports"));
+
+    layout->addStretch();
+    return page;
+}
+
+QWidget* SidebarPanel::makeLibraryPage() {
+    auto* page = new QWidget(this);
+    auto* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(10, 10, 10, 10);
+
+    auto* header = new QLabel(tr("Stock clips"), page);
+    header->setStyleSheet("font-size: 13pt; font-weight: 600;");
+    layout->addWidget(header);
+    layout->addWidget(new QLabel(tr("Click to insert at the playhead:"), page));
+
+    auto* list = new QListWidget(page);
+    const struct { const char* id; const char* label; } assets[] = {
+        {"black-5s", "Black background (5s)"},
+        {"white-5s", "White background (5s)"},
+        {"blue-5s", "Blue background (5s)"},
+        {"gray-5s", "Gray background (5s)"},
+        {"red-5s", "Red background (5s)"},
+    };
+    for (const auto& asset : assets) {
+        auto* item = new QListWidgetItem(tr(asset.label), list);
+        item->setData(Qt::UserRole, QString::fromLatin1(asset.id));
+    }
+    connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+        if (item) emit libraryAssetActivated(item->data(Qt::UserRole).toString());
+    });
+    layout->addWidget(list, 1);
     return page;
 }
 
 QWidget* SidebarPanel::makeTemplatesPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->addWidget(new QLabel(tr("<b>Project Templates</b>"), page));
-    layout->addWidget(new QLabel(tr("Start from a preset sequence size."), page));
+    layout->setContentsMargins(10, 10, 10, 10);
+
+    auto* header = new QLabel(tr("Templates"), page);
+    header->setStyleSheet("font-size: 13pt; font-weight: 600;");
+    layout->addWidget(header);
 
     templateList_ = new QListWidget(page);
     const QDir templateDir(QCoreApplication::applicationDirPath() + "/../templates");
@@ -153,65 +201,110 @@ QWidget* SidebarPanel::makeTemplatesPage() {
     addTemplatesFrom(sourceTemplateDir);
 
     if (templateList_->count() == 0) {
-        templateList_->addItem(tr("Blank 1080p (built-in)"));
-        templateList_->item(0)->setData(Qt::UserRole, QString("__builtin_blank_1080p__"));
-        templateList_->addItem(tr("Vertical Reels 9:16"));
-        templateList_->item(1)->setData(Qt::UserRole, QString("__builtin_vertical_916__"));
-        templateList_->addItem(tr("YouTube 1080p"));
-        templateList_->item(2)->setData(Qt::UserRole, QString("__builtin_youtube_1080p__"));
+        const struct { const char* id; const char* name; } builtins[] = {
+            {"__builtin_blank_1080p__", "Blank 1080p"},
+            {"__builtin_vertical_916__", "Vertical Reels 9:16"},
+            {"__builtin_youtube_1080p__", "YouTube 1080p"},
+        };
+        for (const auto& b : builtins) {
+            auto* item = new QListWidgetItem(tr(b.name), templateList_);
+            item->setData(Qt::UserRole, QString::fromLatin1(b.id));
+        }
     }
 
-    connect(templateList_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        if (!item) return;
-        emit templateActivated(item->data(Qt::UserRole).toString());
+    connect(templateList_, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+        if (item) emit templateActivated(item->data(Qt::UserRole).toString());
     });
 
+    auto* useBtn = new QPushButton(tr("Create project from selected"), page);
+    connect(useBtn, &QPushButton::clicked, this, [this]() {
+        if (auto* item = templateList_->currentItem()) {
+            emit templateActivated(item->data(Qt::UserRole).toString());
+        }
+    });
     layout->addWidget(templateList_, 1);
+    layout->addWidget(useBtn);
     return page;
+}
+
+void SidebarPanel::populateTextPresets() {
+    const struct { const char* id; const char* label; const char* text; } presets[] = {
+        {"lower-third-minimal", "Lower third — Minimal", "Your name here"},
+        {"lower-third-broadcast", "Lower third — Broadcast", "Segment title"},
+        {"quote", "Quote", "Your quote here"},
+        {"rating", "Rating stars", "Product name"},
+        {"credits", "Rolling credits", "Directed by You"},
+        {"timer", "Timer", "01:00"},
+        {"meme", "Meme top/bottom", "TOP TEXT / BOTTOM TEXT"},
+        {"intro-clean", "Intro — Clean", "My Video"},
+        {"outro-stamp", "Outro — Stamp", "Thanks for watching"},
+    };
+    for (const auto& p : presets) {
+        auto* item = new QListWidgetItem(tr(p.label), textPresetList_);
+        item->setData(Qt::UserRole, QString::fromLatin1(p.id));
+        item->setData(Qt::UserRole + 1, QString::fromUtf8(p.text));
+    }
 }
 
 QWidget* SidebarPanel::makeTextPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->addWidget(new QLabel(tr("<b>Text</b>"), page));
+    layout->setContentsMargins(10, 10, 10, 10);
+
+    auto* header = new QLabel(tr("Text"), page);
+    header->setStyleSheet("font-size: 13pt; font-weight: 600;");
+    layout->addWidget(header);
+    layout->addWidget(new QLabel(tr("Click a preset to add it at the playhead:"), page));
 
     textPresetList_ = new QListWidget(page);
-    const QStringList presets = {
-        tr("Lower third — Minimal"),
-        tr("Lower third — Broadcast"),
-        tr("Quote"),
-        tr("Rating stars"),
-        tr("Rolling credits"),
-        tr("Timer"),
-        tr("Meme top/bottom"),
-        tr("Intro — Clean"),
-        tr("Outro — Stamp"),
-    };
-    for (const QString& preset : presets) {
-        auto* item = new QListWidgetItem(preset, textPresetList_);
-        item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-    }
-    layout->addWidget(new QLabel(tr("Presets preview (editable titles coming soon)"), page));
+    populateTextPresets();
+    connect(textPresetList_, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+        if (!item) return;
+        emit textPresetActivated(item->data(Qt::UserRole).toString(),
+                                 item->data(Qt::UserRole + 1).toString());
+    });
     layout->addWidget(textPresetList_, 1);
     return page;
+}
+
+void SidebarPanel::populateTransitions() {
+    const struct { const char* id; const char* label; } transitions[] = {
+        {"cross-dissolve", "Cross dissolve"},
+        {"fade-in", "Fade in"},
+        {"fade-out", "Fade out"},
+        {"dip-black", "Dip to black"},
+        {"dip-white", "Dip to white"},
+        {"wipe", "Wipe"},
+        {"slide", "Slide"},
+        {"push", "Push"},
+        {"zoom", "Zoom"},
+        {"spin", "Spin"},
+        {"blur", "Blur"},
+        {"glitch", "Glitch"},
+        {"light-leak", "Light leak"},
+        {"film-burn", "Film burn"},
+    };
+    for (const auto& t : transitions) {
+        auto* item = new QListWidgetItem(tr(t.label), transitionList_);
+        item->setData(Qt::UserRole, QString::fromLatin1(t.id));
+    }
 }
 
 QWidget* SidebarPanel::makeTransitionsPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->addWidget(new QLabel(tr("<b>Transitions</b>"), page));
+    layout->setContentsMargins(10, 10, 10, 10);
+
+    auto* header = new QLabel(tr("Transitions"), page);
+    header->setStyleSheet("font-size: 13pt; font-weight: 600;");
+    layout->addWidget(header);
+    layout->addWidget(new QLabel(tr("Select a clip, move playhead to a cut, then click:"), page));
 
     transitionList_ = new QListWidget(page);
-    const QStringList transitions = {
-        tr("Cross dissolve"), tr("Fade in"), tr("Fade out"), tr("Dip to black"),
-        tr("Dip to white"), tr("Wipe"), tr("Slide"), tr("Push"), tr("Zoom"),
-        tr("Spin"), tr("Blur"), tr("Glitch"), tr("Light leak"), tr("Film burn"),
-    };
-    for (const QString& name : transitions) {
-        auto* item = new QListWidgetItem(name, transitionList_);
-        item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-    }
-    layout->addWidget(new QLabel(tr("Drag onto cut points (timeline engine milestone)"), page));
+    populateTransitions();
+    connect(transitionList_, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+        if (item) emit transitionActivated(item->data(Qt::UserRole).toString());
+    });
     layout->addWidget(transitionList_, 1);
     return page;
 }

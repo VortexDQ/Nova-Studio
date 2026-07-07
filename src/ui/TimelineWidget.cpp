@@ -71,7 +71,9 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
             QRect clipRect(x, y + 4, w, kTrackHeight - 8);
             QColor clipColor = track->type() == TrackType::Video
                                     ? QColor(64, 105, 210)
-                                    : QColor(46, 168, 125);
+                                    : track->type() == TrackType::Subtitle
+                                          ? QColor(210, 130, 50)
+                                          : QColor(46, 168, 125);
             painter.setBrush(clipColor);
             painter.setPen(QPen(clipColor.lighter(125), 1));
             painter.drawRoundedRect(clipRect, 4, 4);

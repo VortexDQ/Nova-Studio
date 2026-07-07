@@ -8,18 +8,17 @@ class QToolButton;
 class QListWidget;
 class QLineEdit;
 class QComboBox;
-class QLabel;
+class QPushButton;
+class QVBoxLayout;
 
 namespace nova::ui {
 
-// Clipchamp-style left rail: icon categories with a stacked content panel.
 class SidebarPanel : public QWidget {
     Q_OBJECT
 
 public:
     explicit SidebarPanel(QWidget* parent = nullptr);
 
-    QWidget* mediaPage() const;
     QListWidget* mediaList() const;
     QLineEdit* mediaSearch() const;
     QComboBox* mediaFolderFilter() const;
@@ -28,16 +27,24 @@ public:
     QListWidget* transitionList() const;
 
 signals:
-    void categoryChanged(int index);
+    void importMediaRequested();
+    void importMediaToFolder(const QString& folder);
     void templateActivated(const QString& templatePath);
+    void textPresetActivated(const QString& presetId, const QString& defaultText);
+    void transitionActivated(const QString& transitionId);
+    void libraryAssetActivated(const QString& assetId);
 
 private:
     void buildUi();
-    QWidget* makePlaceholderPage(const QString& title, const QString& description);
+    QToolButton* addRailButton(const QString& label, int index, QVBoxLayout* railLayout);
     QWidget* makeMediaPage();
+    QWidget* makeRecordPage();
+    QWidget* makeLibraryPage();
     QWidget* makeTemplatesPage();
     QWidget* makeTextPage();
     QWidget* makeTransitionsPage();
+    void populateTextPresets();
+    void populateTransitions();
 
     QStackedWidget* stack_ = nullptr;
     QButtonGroup* categoryGroup_ = nullptr;

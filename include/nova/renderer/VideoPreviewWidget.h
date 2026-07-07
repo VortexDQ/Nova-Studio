@@ -32,6 +32,8 @@ public slots:
     void setBrightness(int value);   // -100..100, UI range
     void setContrast(int value);     // -100..100, UI range
     void setSaturation(int value);   // 0..200, UI range (100 = neutral)
+    void setClipOpacity(float opacity);  // 0..1
+    void setDipMix(float mix, bool white);  // mix 0..1, white vs black dip
 
 protected:
     void initializeGL() override;
@@ -47,6 +49,9 @@ private:
     float brightness_ = 0.0f;   // -1..1
     float contrast_ = 1.0f;     // 0..2
     float saturation_ = 1.0f;   // 0..2
+    float clipOpacity_ = 1.0f;
+    float dipMix_ = 0.0f;
+    float dipWhite_ = 0.0f;
 
     int pendingWidth_ = 0;
     int pendingHeight_ = 0;

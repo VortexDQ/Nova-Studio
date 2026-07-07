@@ -40,6 +40,12 @@ struct Clip {
     int colorLabel = 0;
     std::optional<std::string> linkedClipId; // e.g. matching audio for a video clip
 
+    std::string overlayText;       // title/caption content
+    std::string stylePreset;       // e.g. lower-third-minimal
+    std::string transitionIn;      // fade-in, dip-black, ...
+    std::string transitionOut;     // fade-out, cross-dissolve, ...
+    double transitionDurationSec = 0.5;
+
     FrameNumber duration() const { return timelineEnd - timelineStart; }
 };
 
@@ -97,7 +103,7 @@ public:
     const Clip* findClipAt(FrameNumber frame) const {
         auto it = std::find_if(clips_.begin(), clips_.end(),
                                [&](const Clip& c) {
-                                   return frame > c.timelineStart && frame < c.timelineEnd;
+                                   return frame >= c.timelineStart && frame < c.timelineEnd;
                                });
         return it == clips_.end() ? nullptr : &(*it);
     }

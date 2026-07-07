@@ -36,6 +36,9 @@ uniform sampler2D uTexture;
 uniform float uBrightness; // -1..1
 uniform float uContrast;   // 0..2
 uniform float uSaturation; // 0..2
+uniform float uOpacity;    // 0..1
+uniform float uDipMix;     // 0 = show video, 1 = full dip
+uniform float uDipWhite;   // 0 = black dip, 1 = white dip
 
 void main() {
     vec3 color = texture(uTexture, vUV).rgb;
@@ -45,8 +48,12 @@ void main() {
 
     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
     color = mix(vec3(luma), color, uSaturation);
+    color = clamp(color, 0.0, 1.0);
 
-    FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+    vec3 dipColor = mix(vec3(0.0), vec3(1.0), uDipWhite);
+    color = mix(dipColor, color, (1.0 - uDipMix) * uOpacity);
+
+    FragColor = vec4(color, 1.0);
 }
 )GLSL";
 
@@ -135,6 +142,9 @@ void VideoPreviewWidget::paintGL() {
     program_->setUniformValue("uBrightness", brightness_);
     program_->setUniformValue("uContrast", contrast_);
     program_->setUniformValue("uSaturation", saturation_);
+    program_->setUniformValue("uOpacity", clipOpacity_);
+    program_->setUniformValue("uDipMix", dipMix_);
+    program_->setUniformValue("uDipWhite", dipWhite_);
 
     glBindVertexArray(vao_);
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -156,6 +166,17 @@ void VideoPreviewWidget::setContrast(int value) {
 
 void VideoPreviewWidget::setSaturation(int value) {
     saturation_ = std::clamp(value, 0, 200) / 100.0f;
+    update();
+}
+
+void VideoPreviewWidget::setClipOpacity(float opacity) {
+    clipOpacity_ = std::clamp(opacity, 0.0f, 1.0f);
+    update();
+}
+
+void VideoPreviewWidget::setDipMix(float mix, bool white) {
+    dipMix_ = std::clamp(mix, 0.0f, 1.0f);
+    dipWhite_ = white ? 1.0f : 0.0f;
     update();
 }
 
