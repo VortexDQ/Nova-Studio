@@ -5,3 +5,9 @@
 *.user
 *.suo
 CMakeUserPresets.json
+
+# Local user media and project backups (not part of the app)
+*.mp4
+*.mov
+*.mkv
+*_backups/
