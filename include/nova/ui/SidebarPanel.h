@@ -33,6 +33,9 @@ signals:
     void textPresetActivated(const QString& presetId, const QString& defaultText);
     void transitionActivated(const QString& transitionId);
     void libraryAssetActivated(const QString& assetId);
+    void recordRequested(int mode);
+    void stopRecordRequested();
+    void aiToolRequested(const QString& toolId);
 
 private:
     void buildUi();
@@ -43,6 +46,7 @@ private:
     QWidget* makeTemplatesPage();
     QWidget* makeTextPage();
     QWidget* makeTransitionsPage();
+    QWidget* makeAIPage();
     void populateTextPresets();
     void populateTransitions();
 

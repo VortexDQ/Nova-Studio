@@ -9,10 +9,12 @@
 #include <string>
 
 #include "nova/media/Decoder.h"
+#include "nova/media/MediaRecorder.h"
 #include "nova/project/Project.h"
 
 class QComboBox;
 class QSlider;
+class QLineEdit;
 class QLabel;
 class QPushButton;
 class QAudioOutput;
@@ -61,9 +63,18 @@ private slots:
     void onMediaFolderChanged();
     void onTimelineSelectionChanged(int index);
     void onAddTimeline();
+    void onAddVideoTrack();
+    void onAddAudioTrack();
+    void onAddTextTrack();
     void onPlayPauseClicked();
     void onPlaybackTick();
     void onTimelineSeek(double seconds);
+    void onTimelineScrub(double seconds);
+    void onTimelineEdited();
+    void onTimelineSelectionCleared();
+    void onClipEditRequested(const QString& clipId);
+    void onClipTextEdited();
+    void editSelectedClipText();
     void onSplitAtPlayhead();
     void onDeleteSelectedClip();
     void onExtractAudio();
@@ -73,6 +84,18 @@ private slots:
     void onTextPresetActivated(const QString& presetId, const QString& defaultText);
     void onTransitionActivated(const QString& transitionId);
     void onLibraryAssetActivated(const QString& assetId);
+    void onRecordRequested(int mode);
+    void onStopRecordRequested();
+    void onAiToolRequested(const QString& toolId);
+    void onExportMp3();
+    void onExportGif();
+    void onTrimStartAtPlayhead();
+    void onTrimEndAtPlayhead();
+    void onTrimToolChanged(nova::timeline::TrimTool tool);
+    void onRotateClip();
+    void onRemoveAudioFromClip();
+    void onImportBrandLogo();
+    void onChromaKeyChanged(int value);
 
 private:
     void buildDockPanels();
@@ -94,14 +117,22 @@ private:
     void syncAudioToCurrentTime();
     void updatePreviewEffects();
     void updateTitleOverlay();
+    double clipSourceSeconds(const nova::timeline::Clip& clip, double timelineSeconds) const;
+    double timelineDurationSeconds() const;
+    const nova::timeline::Clip* findAudioClipAt(double seconds) const;
+    void showBlackPreview();
+    void presentTimelineAt(double timelineSeconds, bool advanceDecoder);
+    void syncTimelineAudioAt(double timelineSeconds, bool shouldPlay);
     nova::timeline::Timeline* activeTimeline();
     nova::timeline::Track* findOrAddTitleTrack(nova::timeline::Timeline* timeline);
     const nova::timeline::Clip* findVideoClipAt(double seconds) const;
     const nova::timeline::Clip* findTitleClipAt(double seconds) const;
     const nova::timeline::Clip* findClipById(const std::string& id) const;
     void importMediaFile(const QString& path, const QString& folder);
+    void ensureMediaInLibrary(const QString& path, const QString& folder);
     QString ensureStockAsset(const QString& assetId);
     QString formatBytes(int64_t bytes) const;
+    void seekToTimelinePosition(double seconds, bool resumePlayback);
 
     nova::renderer::VideoPreviewWidget* preview_ = nullptr;
     PreviewOverlay* previewOverlay_ = nullptr;
@@ -111,26 +142,35 @@ private:
     QSlider* brightnessSlider_ = nullptr;
     QSlider* contrastSlider_ = nullptr;
     QSlider* saturationSlider_ = nullptr;
+    QSlider* chromaKeySlider_ = nullptr;
     QSlider* volumeSlider_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* timeLabel_ = nullptr;
     QLabel* projectMetaLabel_ = nullptr;
     QLabel* mediaMetaLabel_ = nullptr;
+    QLineEdit* clipTextEdit_ = nullptr;
     QPushButton* playButton_ = nullptr;
     QPushButton* splitButton_ = nullptr;
+    QPushButton* deleteClipButton_ = nullptr;
     QPushButton* extractAudioButton_ = nullptr;
+    QComboBox* trimToolCombo_ = nullptr;
 
     std::unique_ptr<nova::project::Project> project_;
     std::unique_ptr<nova::media::Decoder> decoder_;
+    std::unique_ptr<nova::media::MediaRecorder> mediaRecorder_;
     QMediaPlayer* audioPlayer_ = nullptr;
     QAudioOutput* audioOutput_ = nullptr;
     QTimer playbackTimer_;
     QTimer autosaveTimer_;
     bool playing_ = false;
+    bool scrubbingActive_ = false;
+    bool wasPlayingBeforeScrub_ = false;
     double currentTimeSeconds_ = 0.0;
     QString currentMediaPath_;
+    QString currentAudioPath_;
     QString pendingImportFolder_;
     std::string selectedClipId_;
+    std::string activePlaybackClipId_;
 
     QElapsedTimer playbackClock_;
     double playbackStartSeconds_ = 0.0;

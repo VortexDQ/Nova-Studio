@@ -58,6 +58,8 @@ To open the app later (without rebuilding):
 
 Non-developer walkthrough: [`docs/INSTALL-WINDOWS.md`](docs/INSTALL-WINDOWS.md)
 
+**Ship a portable `.exe` folder or ZIP:** [`docs/PACKAGING.md`](docs/PACKAGING.md) — or run `.\scripts\package.ps1` after building.
+
 **Linux / macOS:**
 
 ```bash

@@ -39,9 +39,16 @@ uniform float uSaturation; // 0..2
 uniform float uOpacity;    // 0..1
 uniform float uDipMix;     // 0 = show video, 1 = full dip
 uniform float uDipWhite;   // 0 = black dip, 1 = white dip
+uniform float uRotation;   // radians
+uniform float uChromaMix;    // 0 = off, 1 = full key
+uniform vec3 uChromaColor;   // key color (green screen)
 
 void main() {
-    vec3 color = texture(uTexture, vUV).rgb;
+    vec2 uv = vUV - 0.5;
+    float c = cos(uRotation);
+    float s = sin(uRotation);
+    uv = vec2(c * uv.x - s * uv.y, s * uv.x + c * uv.y) + 0.5;
+    vec3 color = texture(uTexture, uv).rgb;
 
     color += uBrightness;
     color = (color - 0.5) * uContrast + 0.5;
@@ -49,6 +56,11 @@ void main() {
     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
     color = mix(vec3(luma), color, uSaturation);
     color = clamp(color, 0.0, 1.0);
+
+    float chromaDist = distance(color, uChromaColor);
+  if (uChromaMix > 0.0 && chromaDist < 0.35 * uChromaMix) {
+        color = mix(color, vec3(0.0), (0.35 * uChromaMix - chromaDist) / max(0.001, 0.35 * uChromaMix));
+    }
 
     vec3 dipColor = mix(vec3(0.0), vec3(1.0), uDipWhite);
     color = mix(dipColor, color, (1.0 - uDipMix) * uOpacity);
@@ -145,6 +157,9 @@ void VideoPreviewWidget::paintGL() {
     program_->setUniformValue("uOpacity", clipOpacity_);
     program_->setUniformValue("uDipMix", dipMix_);
     program_->setUniformValue("uDipWhite", dipWhite_);
+    program_->setUniformValue("uRotation", rotationRadians_);
+    program_->setUniformValue("uChromaMix", chromaMix_);
+    program_->setUniformValue("uChromaColor", chromaColor_[0], chromaColor_[1], chromaColor_[2]);
 
     glBindVertexArray(vao_);
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -177,6 +192,19 @@ void VideoPreviewWidget::setClipOpacity(float opacity) {
 void VideoPreviewWidget::setDipMix(float mix, bool white) {
     dipMix_ = std::clamp(mix, 0.0f, 1.0f);
     dipWhite_ = white ? 1.0f : 0.0f;
+    update();
+}
+
+void VideoPreviewWidget::setRotationDegrees(float degrees) {
+    rotationRadians_ = static_cast<float>(degrees * 3.141592653589793 / 180.0);
+    update();
+}
+
+void VideoPreviewWidget::setChromaKey(float mix, float greenR, float greenG, float greenB) {
+    chromaMix_ = std::clamp(mix, 0.0f, 1.0f);
+    chromaColor_[0] = greenR;
+    chromaColor_[1] = greenG;
+    chromaColor_[2] = greenB;
     update();
 }
 

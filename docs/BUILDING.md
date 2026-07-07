@@ -33,6 +33,7 @@ Useful flags:
 .\scripts\setup.ps1 -DeployOnly   # copy Qt/FFmpeg DLLs next to the exe
 .\scripts\setup.ps1 -SkipTests    # skip ctest
 .\scripts\setup.ps1 -Force          # force reconfigure/redeploy
+.\scripts\package.ps1             # portable dist folder + ZIP (see docs/PACKAGING.md)
 ```
 
 ```bash

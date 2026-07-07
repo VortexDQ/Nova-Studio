@@ -1,5 +1,7 @@
 #include "nova/ui/SidebarPanel.h"
 
+#include "nova/media/StockCatalog.h"
+
 #include <QButtonGroup>
 #include <QComboBox>
 #include <QCoreApplication>
@@ -61,16 +63,18 @@ void SidebarPanel::buildUi() {
 
     addRailButton(tr("Media"), 0, railLayout);
     stack_->addWidget(makeMediaPage());
-    addRailButton(tr("Import"), 1, railLayout);
     stack_->addWidget(makeRecordPage());
-    addRailButton(tr("Stock"), 2, railLayout);
+    addRailButton(tr("Record"), 1, railLayout);
     stack_->addWidget(makeLibraryPage());
-    addRailButton(tr("Templ"), 3, railLayout);
+    addRailButton(tr("Stock"), 2, railLayout);
     stack_->addWidget(makeTemplatesPage());
-    addRailButton(tr("Text"), 4, railLayout);
+    addRailButton(tr("Templ"), 3, railLayout);
     stack_->addWidget(makeTextPage());
-    addRailButton(tr("Trans"), 5, railLayout);
+    addRailButton(tr("Text"), 4, railLayout);
     stack_->addWidget(makeTransitionsPage());
+    addRailButton(tr("Trans"), 5, railLayout);
+    stack_->addWidget(makeAIPage());
+    addRailButton(tr("AI"), 6, railLayout);
 
     railLayout->addStretch();
 
@@ -122,10 +126,28 @@ QWidget* SidebarPanel::makeRecordPage() {
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(10, 10, 10, 10);
 
-    auto* header = new QLabel(tr("Import sources"), page);
+    auto* header = new QLabel(tr("Record"), page);
     header->setStyleSheet("font-size: 13pt; font-weight: 600;");
     layout->addWidget(header);
-    layout->addWidget(new QLabel(tr("Bring footage in from your device. Pick a source type:"), page));
+    layout->addWidget(new QLabel(tr("Capture footage directly into your project:"), page));
+
+    auto addRecord = [&](const QString& label, int mode) {
+        auto* btn = new QPushButton(label, page);
+        connect(btn, &QPushButton::clicked, this, [this, mode]() { emit recordRequested(mode); });
+        layout->addWidget(btn);
+    };
+
+    addRecord(tr("Record screen"), 0);
+    addRecord(tr("Record camera"), 1);
+    addRecord(tr("Record screen + camera"), 2);
+    addRecord(tr("Record voice / microphone"), 3);
+
+    auto* stopBtn = new QPushButton(tr("Stop recording"), page);
+    connect(stopBtn, &QPushButton::clicked, this, [this]() { emit stopRecordRequested(); });
+    layout->addWidget(stopBtn);
+
+    layout->addSpacing(12);
+    layout->addWidget(new QLabel(tr("Or import existing files:"), page));
 
     auto addImport = [&](const QString& label, const QString& folder) {
         auto* btn = new QPushButton(label, page);
@@ -134,16 +156,41 @@ QWidget* SidebarPanel::makeRecordPage() {
         });
         layout->addWidget(btn);
     };
-
     addImport(tr("Import video file…"), QStringLiteral("Imports"));
-    addImport(tr("Import screen recording…"), QStringLiteral("Screen recordings"));
-    addImport(tr("Import camera clip…"), QStringLiteral("Camera"));
-    addImport(tr("Import drone footage…"), QStringLiteral("Drone"));
-    addImport(tr("Import phone video…"), QStringLiteral("Mobile"));
     addImport(tr("Import audio…"), QStringLiteral("Imports"));
     addImport(tr("Import image…"), QStringLiteral("Imports"));
 
     layout->addStretch();
+    return page;
+}
+
+QWidget* SidebarPanel::makeAIPage() {
+    auto* page = new QWidget(this);
+    auto* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(10, 10, 10, 10);
+
+    auto* header = new QLabel(tr("AI tools"), page);
+    header->setStyleSheet("font-size: 13pt; font-weight: 600;");
+    layout->addWidget(header);
+    layout->addWidget(new QLabel(tr("Optional AI plugins (offline core stays fast):"), page));
+
+    auto* list = new QListWidget(page);
+    const struct { const char* id; const char* label; } tools[] = {
+        {"tts", "AI text to speech"},
+        {"auto-compose", "AI auto compose"},
+        {"silence-remover", "AI silence remover"},
+        {"noise-remover", "AI background noise remover"},
+        {"subtitles", "AI subtitles"},
+        {"bg-remove", "AI background removal"},
+    };
+    for (const auto& tool : tools) {
+        auto* item = new QListWidgetItem(tr(tool.label), list);
+        item->setData(Qt::UserRole, QString::fromLatin1(tool.id));
+    }
+    connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+        if (item) emit aiToolRequested(item->data(Qt::UserRole).toString());
+    });
+    layout->addWidget(list, 1);
     return page;
 }
 
@@ -158,14 +205,7 @@ QWidget* SidebarPanel::makeLibraryPage() {
     layout->addWidget(new QLabel(tr("Click to insert at the playhead:"), page));
 
     auto* list = new QListWidget(page);
-    const struct { const char* id; const char* label; } assets[] = {
-        {"black-5s", "Black background (5s)"},
-        {"white-5s", "White background (5s)"},
-        {"blue-5s", "Blue background (5s)"},
-        {"gray-5s", "Gray background (5s)"},
-        {"red-5s", "Red background (5s)"},
-    };
-    for (const auto& asset : assets) {
+    for (const auto& asset : nova::media::kStockAssets) {
         auto* item = new QListWidgetItem(tr(asset.label), list);
         item->setData(Qt::UserRole, QString::fromLatin1(asset.id));
     }
@@ -186,8 +226,9 @@ QWidget* SidebarPanel::makeTemplatesPage() {
     layout->addWidget(header);
 
     templateList_ = new QListWidget(page);
-    const QDir templateDir(QCoreApplication::applicationDirPath() + "/../templates");
-    const QDir sourceTemplateDir(QDir(QCoreApplication::applicationDirPath()).filePath("../../templates"));
+    const QDir bundledTemplateDir(QCoreApplication::applicationDirPath() + QStringLiteral("/templates"));
+    const QDir templateDir(QCoreApplication::applicationDirPath() + QStringLiteral("/../templates"));
+    const QDir sourceTemplateDir(QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../templates")));
 
     auto addTemplatesFrom = [&](const QDir& dir) {
         if (!dir.exists()) return;
@@ -197,6 +238,7 @@ QWidget* SidebarPanel::makeTemplatesPage() {
             item->setData(Qt::UserRole, path);
         }
     };
+    addTemplatesFrom(bundledTemplateDir);
     addTemplatesFrom(templateDir);
     addTemplatesFrom(sourceTemplateDir);
 

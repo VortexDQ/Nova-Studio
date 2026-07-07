@@ -1,4 +1,5 @@
 /build/
+/dist/
 /.qt/
 /.vcpkg/
 /.vs/

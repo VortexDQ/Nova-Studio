@@ -3,6 +3,8 @@
 #include <QFileInfo>
 #include <QImageReader>
 
+#include "nova/media/ImageIO.h"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -15,6 +17,20 @@ FileMetadata MediaProbe::probe(const std::string& path) {
     meta.path = path;
     meta.fileName = QFileInfo(QString::fromStdString(path)).fileName().toStdString();
     meta.fileSizeBytes = QFileInfo(QString::fromStdString(path)).size();
+
+    if (path.ends_with(".bmp")) {
+        QImage image;
+        if (ImageIO::loadBmp(path, image) && !image.isNull()) {
+            meta.isImage = true;
+            meta.hasVideo = true;
+            meta.formatName = "bmp";
+            meta.width = image.width();
+            meta.height = image.height();
+            meta.durationSeconds = 5.0;
+            meta.frameRate = 30.0;
+            return meta;
+        }
+    }
 
     QImageReader reader(QString::fromStdString(path));
     if (reader.canRead()) {

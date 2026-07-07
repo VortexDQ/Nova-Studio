@@ -59,9 +59,9 @@ H.265, AV1, VP9 depend on FFmpeg build - validated per platform in CI.
 
 | Feature | Status |
 |---------|--------|
-| Drag-to-move clips | ⬜ |
+| Drag-to-move clips | ✅ |
 | Blade/split at playhead | ✅ |
-| Ripple / roll / slip / slide trim | ⬜ (API partial: ripple-trim) |
+| Ripple / roll / slip / slide trim | ✅ (UI + keyboard shortcuts) |
 | Multi-clip selection, grouping | ⬜ |
 | Snapping, magnetic timeline | ⬜ |
 | Markers, color labels | ⬜ |
@@ -71,7 +71,10 @@ H.265, AV1, VP9 depend on FFmpeg build - validated per platform in CI.
 | Nested sequences / compound clips | ⬜ (model hook exists) |
 | Multicam | ⬜ |
 | Adjustment layers, pre-compositions | ⬜ |
-| Timeline zoom + search | ⬜ |
+| Timeline-driven playback (playhead scrubs preview) | ✅ |
+| Select + delete clips | ✅ |
+| Edit text clips (Inspector, F2, double-click) | ✅ |
+| Stock library (generated plates + sample videos) | ✅ (basic) |
 
 ---
 
@@ -152,8 +155,13 @@ freehand masks, feathering, motion-tracked masks, blend modes, alpha channels.
 
 ## Milestone 10 - Recording (Clipchamp-style) (~4-6 weeks)
 
-Screen, webcam, screen+webcam, mic, game/window/region capture, recording
-overlays. Likely Qt Multimedia + platform capture APIs.
+| Feature | Status |
+|---------|--------|
+| Screen capture | ✅ (partial — Qt `QScreenCapture`) |
+| Webcam capture | ✅ (partial) |
+| Screen + webcam PiP | 🚧 (records screen; compositing planned) |
+| Microphone / voice | ✅ (partial) |
+| Multi-take → media library | ✅ |
 
 ---
 
@@ -167,7 +175,13 @@ mode, multi-thread rendering.
 
 ## Milestone 12 - Export & social (~4-5 weeks)
 
-**Formats:** MP4, MOV, WebM, GIF, image sequences.
+**Formats:** MP4, MOV, WebM, GIF, MP3 (audio), image sequences.
+
+| Feature | Status |
+|---------|--------|
+| MP4 / MOV / MKV / WebM / AVI export | ✅ |
+| MP3 audio export | ✅ (partial — via ffmpeg) |
+| GIF export | ✅ (partial — via ffmpeg) |
 
 **Presets:** 480p–8K, 24/30/60/120 fps, bitrate/codec, hardware encode.
 
@@ -217,8 +231,9 @@ These are **never hard dependencies** of the offline-first core.
 
 ## Immediate next PRs
 
-1. Drag-and-drop clips on the timeline (`TimelineWidget`)
-2. Thumbnail + waveform in media library
-3. Second GLSL effect (Gaussian blur) to validate effect graph
-4. Windows + macOS GitHub Actions build legs
-5. Wire sidebar Text presets to `ClipType::Title` clips
+1. Thumbnail + waveform in media library
+2. Interactive crop/resize + drag trim handles
+3. Screen + webcam PiP compositing during record
+4. Stickers, emojis, shapes (Milestone 8)
+5. Second GLSL effect (Gaussian blur) to validate effect graph
+6. Windows + macOS GitHub Actions build legs

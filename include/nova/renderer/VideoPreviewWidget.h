@@ -34,6 +34,8 @@ public slots:
     void setSaturation(int value);   // 0..200, UI range (100 = neutral)
     void setClipOpacity(float opacity);  // 0..1
     void setDipMix(float mix, bool white);  // mix 0..1, white vs black dip
+    void setRotationDegrees(float degrees);
+    void setChromaKey(float mix, float greenR, float greenG, float greenB);
 
 protected:
     void initializeGL() override;
@@ -52,6 +54,9 @@ private:
     float clipOpacity_ = 1.0f;
     float dipMix_ = 0.0f;
     float dipWhite_ = 0.0f;
+    float rotationRadians_ = 0.0f;
+    float chromaMix_ = 0.0f;
+    float chromaColor_[3] = {0.0f, 1.0f, 0.0f};
 
     int pendingWidth_ = 0;
     int pendingHeight_ = 0;

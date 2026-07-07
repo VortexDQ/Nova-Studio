@@ -71,8 +71,66 @@ int main() {
 
     expect(!v1.rippleTrimEnd("nonexistent", 200), "ripple-trim on missing clip fails gracefully");
 
+    Clip clipC;
+    clipC.id = "c";
+    clipC.timelineStart = 180;
+    clipC.timelineEnd = 240;
+    expect(v1.addClip(clipC), "clip C for ripple start test");
+    expect(v1.rippleTrimStart("b", 130), "ripple-trim start shortens clip B and shifts C");
+    expect(v1.findClip("b")->timelineStart == 130, "clip B start moved");
+    expect(v1.findClip("c")->timelineStart == 170, "clip C shifted left after ripple start");
+
+    Track& v2 = timeline.addTrack("v2", "V2", TrackType::Video);
+    Clip rollLeft;
+    rollLeft.id = "rl";
+    rollLeft.timelineStart = 0;
+    rollLeft.timelineEnd = 60;
+    rollLeft.sourceIn = 0;
+    rollLeft.sourceOut = 60;
+    Clip rollRight;
+    rollRight.id = "rr";
+    rollRight.timelineStart = 60;
+    rollRight.timelineEnd = 120;
+    rollRight.sourceIn = 100;
+    rollRight.sourceOut = 160;
+    v2.addClip(rollLeft);
+    v2.addClip(rollRight);
+    expect(v2.rollTrimAt(60, 75), "roll trim moves cut between neighbors");
+    expect(v2.findClip("rl")->timelineEnd == 75, "roll left clip end follows cut");
+    expect(v2.findClip("rr")->timelineStart == 75, "roll right clip start follows cut");
+
+    expect(v2.slipTrim("rr", 10), "slip trim shifts source in/out");
+    expect(v2.findClip("rr")->sourceIn == 125, "slip advances source in after roll");
+
+    Track& v3 = timeline.addTrack("v3", "V3", TrackType::Video);
+    Clip slidePrev;
+    slidePrev.id = "sp";
+    slidePrev.timelineStart = 0;
+    slidePrev.timelineEnd = 75;
+    slidePrev.sourceIn = 0;
+    slidePrev.sourceOut = 75;
+    Clip slideMid;
+    slideMid.id = "sm";
+    slideMid.timelineStart = 75;
+    slideMid.timelineEnd = 105;
+    slideMid.sourceIn = 0;
+    slideMid.sourceOut = 30;
+    Clip slideNext;
+    slideNext.id = "sn";
+    slideNext.timelineStart = 105;
+    slideNext.timelineEnd = 150;
+    slideNext.sourceIn = 200;
+    slideNext.sourceOut = 245;
+    v3.addClip(slidePrev);
+    v3.addClip(slideMid);
+    v3.addClip(slideNext);
+    expect(v3.slideClip("sm", 85), "slide trim moves middle clip between neighbors");
+    expect(v3.findClip("sp")->timelineEnd == 85, "slide adjusts previous clip end");
+    expect(v3.findClip("sm")->timelineStart == 85, "slide moves clip start");
+    expect(v3.findClip("sn")->timelineStart == 115, "slide adjusts next clip start");
+
     expect(v1.removeClip("a"), "removeClip succeeds for an existing clip");
-    expect(v1.clips().size() == 2, "track keeps right split and clip B after removal");
+    expect(v1.clips().size() == 3, "track keeps right split, clip B, and clip C after removal");
     expect(!v1.removeClip("a"), "removeClip on already-removed clip fails");
 
     if (g_failures > 0) {

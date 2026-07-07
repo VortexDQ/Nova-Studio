@@ -1,5 +1,24 @@
 # Install Nova Studio on Windows (non-developer guide)
 
+**You do not need Python, Visual Studio, or any developer tools.**
+
+## Easiest way: download the ready-made ZIP
+
+1. Go to [GitHub Releases](https://github.com/VortexDQ/Nova-Studio/releases) for this project.
+2. Download **`NovaStudio-*-win64.zip`**.
+3. Right-click → **Extract All**.
+4. Open the `NovaStudio` folder and double-click **`nova_studio.exe`**.
+
+If Windows SmartScreen appears: **More info** → **Run anyway**.
+
+If the app will not start: run **`Install-VC-Runtime.bat`** once in that folder, then try again.
+
+---
+
+## Build from source (developers only)
+
+Only use this if you are modifying the code or there is no release ZIP yet.
+
 You do **not** need Python, Qt, FFmpeg, or any dev tools installed beforehand.
 One script installs everything for you.
 
@@ -67,3 +86,13 @@ Run again - the script picks up where it left off:
 ```powershell
 .\scripts\setup.ps1 -Force -Run
 ```
+
+## Package for another PC
+
+After a successful build, create a portable folder and ZIP:
+
+```powershell
+.\scripts\package.ps1
+```
+
+See [`docs/PACKAGING.md`](PACKAGING.md) for the full guide (manual steps, troubleshooting, VC++ redistributable).

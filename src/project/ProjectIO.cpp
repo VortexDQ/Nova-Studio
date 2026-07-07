@@ -83,6 +83,9 @@ QJsonObject clipToJson(const nova::timeline::Clip& clip) {
     if (clip.transitionDurationSec != 0.5) {
         obj["transitionDurationSec"] = clip.transitionDurationSec;
     }
+    if (clip.rotationDegrees != 0.0) obj["rotationDegrees"] = clip.rotationDegrees;
+    if (clip.chromaKeyEnabled) obj["chromaKeyEnabled"] = clip.chromaKeyEnabled;
+    if (clip.chromaKeyStrength != 0.6) obj["chromaKeyStrength"] = clip.chromaKeyStrength;
     return obj;
 }
 
@@ -114,6 +117,9 @@ bool clipFromJson(const QJsonObject& obj, nova::timeline::Clip& clip) {
     clip.transitionIn = obj["transitionIn"].toString().toStdString();
     clip.transitionOut = obj["transitionOut"].toString().toStdString();
     clip.transitionDurationSec = obj["transitionDurationSec"].toDouble(0.5);
+    clip.rotationDegrees = obj["rotationDegrees"].toDouble(0.0);
+    clip.chromaKeyEnabled = obj["chromaKeyEnabled"].toBool(false);
+    clip.chromaKeyStrength = obj["chromaKeyStrength"].toDouble(0.6);
     return true;
 }
 
@@ -255,6 +261,12 @@ QJsonObject projectToJson(const Project& project) {
     root["lastPlayheadSeconds"] = project.lastPlayheadSeconds;
     root["lastPreviewMediaPath"] = QString::fromStdString(project.lastPreviewMediaPath);
     root["selectedClipId"] = QString::fromStdString(project.selectedClipId);
+
+    QJsonObject brand;
+    brand["logoPath"] = QString::fromStdString(project.brand.logoPath);
+    brand["primaryColor"] = QString::fromStdString(project.brand.primaryColor);
+    brand["fontFamily"] = QString::fromStdString(project.brand.fontFamily);
+    root["brand"] = brand;
     return root;
 }
 
@@ -285,6 +297,11 @@ std::unique_ptr<Project> projectFromJson(const QJsonObject& root) {
     project->lastPlayheadSeconds = root["lastPlayheadSeconds"].toDouble(0.0);
     project->lastPreviewMediaPath = root["lastPreviewMediaPath"].toString().toStdString();
     project->selectedClipId = root["selectedClipId"].toString().toStdString();
+    if (const QJsonObject brand = root["brand"].toObject(); !brand.isEmpty()) {
+        project->brand.logoPath = brand["logoPath"].toString().toStdString();
+        project->brand.primaryColor = brand["primaryColor"].toString("#4a69d4").toStdString();
+        project->brand.fontFamily = brand["fontFamily"].toString("Segoe UI").toStdString();
+    }
     project->dirty = false;
     return project;
 }

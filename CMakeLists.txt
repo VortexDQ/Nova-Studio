@@ -58,9 +58,15 @@ add_library(nova_media STATIC
     src/media/AudioExtractor.cpp
     src/media/MediaProbe.cpp
     src/media/VideoExporter.cpp
+    src/media/StockAssetGenerator.cpp
+    src/media/ImageIO.cpp
+    src/media/MediaRecorder.cpp
+    src/media/AudioExporter.cpp
+    src/media/GifExporter.cpp
+    include/nova/media/MediaRecorder.h
 )
 target_include_directories(nova_media PUBLIC ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(nova_media PUBLIC nova_core PkgConfig::FFMPEG Qt6::Gui)
+target_link_libraries(nova_media PUBLIC nova_core PkgConfig::FFMPEG Qt6::Gui Qt6::Multimedia)
 
 # --- nova_renderer: Qt OpenGL preview widget + shader effect pipeline ---
 add_library(nova_renderer STATIC
@@ -92,6 +98,18 @@ target_link_libraries(nova_studio PRIVATE nova_ui Qt6::Widgets Qt6::OpenGLWidget
 
 if(APPLE)
     set_target_properties(nova_studio PROPERTIES MACOSX_BUNDLE TRUE)
+endif()
+
+if(WIN32)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/../../../bin" "${Qt6_DIR}/../../bin")
+    if(WINDEPLOYQT_EXECUTABLE)
+        add_custom_command(TARGET nova_studio POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXECUTABLE}"
+                    --no-translations
+                    --no-system-d3d-compiler
+                    "$<TARGET_FILE:nova_studio>"
+            COMMENT "Deploying Qt runtime plugins for nova_studio")
+    endif()
 endif()
 
 if(NOVA_BUILD_TESTS)

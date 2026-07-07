@@ -5,7 +5,12 @@
 #include "nova/renderer/VideoPreviewWidget.h"
 #include "nova/core/Logger.h"
 #include "nova/media/AudioExtractor.h"
+#include "nova/media/ImageIO.h"
 #include "nova/media/MediaProbe.h"
+#include "nova/media/StockAssetGenerator.h"
+#include "nova/media/StockCatalog.h"
+#include "nova/media/AudioExporter.h"
+#include "nova/media/GifExporter.h"
 #include "nova/media/VideoExporter.h"
 #include "nova/project/ProjectIO.h"
 #include "nova/project/ProjectStore.h"
@@ -16,6 +21,7 @@
 #include <QComboBox>
 #include <QDockWidget>
 #include <QFileDialog>
+#include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -28,6 +34,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSlider>
 #include <QUrl>
 #include <QImageReader>
@@ -52,6 +59,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     resize(1400, 900);
 
     decoder_ = std::make_unique<nova::media::Decoder>();
+    mediaRecorder_ = std::make_unique<nova::media::MediaRecorder>(this);
     project_ = nova::project::Project::createBlank("Untitled", 30.0, 1920, 1080);
 
     preview_ = new nova::renderer::VideoPreviewWidget(this);
@@ -123,6 +131,12 @@ void MainWindow::buildMenus() {
     exportVideoAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
     connect(exportVideoAction, &QAction::triggered, this, &MainWindow::onExportVideo);
 
+    QAction* exportMp3Action = fileMenu->addAction(tr("Export &MP3 Audio..."));
+    connect(exportMp3Action, &QAction::triggered, this, &MainWindow::onExportMp3);
+
+    QAction* exportGifAction = fileMenu->addAction(tr("Export &GIF..."));
+    connect(exportGifAction, &QAction::triggered, this, &MainWindow::onExportGif);
+
     QAction* importAction = fileMenu->addAction(tr("&Import Media..."));
     connect(importAction, &QAction::triggered, this, &MainWindow::onImportMedia);
 
@@ -149,8 +163,48 @@ void MainWindow::buildMenus() {
     deleteClipAction->setShortcut(QKeySequence::Delete);
     connect(deleteClipAction, &QAction::triggered, this, &MainWindow::onDeleteSelectedClip);
 
+    editMenu->addSeparator();
+    editMenu->addAction(tr("Trim clip &start at playhead"), this, &MainWindow::onTrimStartAtPlayhead);
+    editMenu->addAction(tr("Trim clip &end at playhead"), this, &MainWindow::onTrimEndAtPlayhead);
+    editMenu->addSeparator();
+    auto* trimSelectAction = editMenu->addAction(tr("Trim tool: &Selection (V)"));
+    trimSelectAction->setShortcut(QKeySequence(Qt::Key_V));
+    connect(trimSelectAction, &QAction::triggered, this, [this]() {
+        if (timelineWidget_) timelineWidget_->setTrimTool(nova::timeline::TrimTool::Selection);
+    });
+    auto* trimRippleAction = editMenu->addAction(tr("Trim tool: &Ripple (R)"));
+    trimRippleAction->setShortcut(QKeySequence(Qt::Key_R));
+    connect(trimRippleAction, &QAction::triggered, this, [this]() {
+        if (timelineWidget_) timelineWidget_->setTrimTool(nova::timeline::TrimTool::Ripple);
+    });
+    auto* trimRollAction = editMenu->addAction(tr("Trim tool: R&oll (N)"));
+    trimRollAction->setShortcut(QKeySequence(Qt::Key_N));
+    connect(trimRollAction, &QAction::triggered, this, [this]() {
+        if (timelineWidget_) timelineWidget_->setTrimTool(nova::timeline::TrimTool::Roll);
+    });
+    auto* trimSlipAction = editMenu->addAction(tr("Trim tool: S&lip (Y)"));
+    trimSlipAction->setShortcut(QKeySequence(Qt::Key_Y));
+    connect(trimSlipAction, &QAction::triggered, this, [this]() {
+        if (timelineWidget_) timelineWidget_->setTrimTool(nova::timeline::TrimTool::Slip);
+    });
+    auto* trimSlideAction = editMenu->addAction(tr("Trim tool: Sl&ide (U)"));
+    trimSlideAction->setShortcut(QKeySequence(Qt::Key_U));
+    connect(trimSlideAction, &QAction::triggered, this, [this]() {
+        if (timelineWidget_) timelineWidget_->setTrimTool(nova::timeline::TrimTool::Slide);
+    });
+    editMenu->addSeparator();
+    editMenu->addAction(tr("&Rotate clip 90°"), this, &MainWindow::onRotateClip);
+    editMenu->addAction(tr("&Remove audio from clip"), this, &MainWindow::onRemoveAudioFromClip);
+
+    QMenu* brandMenu = menuBar()->addMenu(tr("&Brand"));
+    brandMenu->addAction(tr("Import brand &logo..."), this, &MainWindow::onImportBrandLogo);
+
     QMenu* sequenceMenu = menuBar()->addMenu(tr("&Sequence"));
     sequenceMenu->addAction(tr("&Add Timeline"), this, &MainWindow::onAddTimeline);
+    sequenceMenu->addSeparator();
+    sequenceMenu->addAction(tr("Add &Video Track"), this, &MainWindow::onAddVideoTrack);
+    sequenceMenu->addAction(tr("Add &Audio Track"), this, &MainWindow::onAddAudioTrack);
+    sequenceMenu->addAction(tr("Add &Text Track"), this, &MainWindow::onAddTextTrack);
 }
 
 void MainWindow::applyTheme() {
@@ -261,6 +315,22 @@ void MainWindow::buildDockPanels() {
     connect(sidebar_, &SidebarPanel::textPresetActivated, this, &MainWindow::onTextPresetActivated);
     connect(sidebar_, &SidebarPanel::transitionActivated, this, &MainWindow::onTransitionActivated);
     connect(sidebar_, &SidebarPanel::libraryAssetActivated, this, &MainWindow::onLibraryAssetActivated);
+    connect(sidebar_, &SidebarPanel::recordRequested, this, &MainWindow::onRecordRequested);
+    connect(sidebar_, &SidebarPanel::stopRecordRequested, this, &MainWindow::onStopRecordRequested);
+    connect(sidebar_, &SidebarPanel::aiToolRequested, this, &MainWindow::onAiToolRequested);
+    connect(mediaRecorder_.get(), &nova::media::MediaRecorder::recordingFinished, this,
+            [this](const QString& path, bool success, const QString& error) {
+                if (!success) {
+                    QMessageBox::warning(this, tr("Recording failed"), error);
+                    statusLabel_->setText(tr("Recording failed"));
+                    return;
+                }
+                importMediaFile(path, QStringLiteral("Recordings"));
+                addMediaToTimeline(path);
+                statusLabel_->setText(tr("Recording saved: %1").arg(QFileInfo(path).fileName()));
+            });
+    connect(mediaRecorder_.get(), &nova::media::MediaRecorder::statusChanged, this,
+            [this](const QString& status) { statusLabel_->setText(status); });
 
     auto* inspectorDock = new QDockWidget(tr("Inspector"), this);
     auto* inspectorPanel = new QWidget(inspectorDock);
@@ -273,6 +343,13 @@ void MainWindow::buildDockPanels() {
     mediaMetaLabel_->setWordWrap(true);
     mediaMetaLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     inspectorLayout->addWidget(mediaMetaLabel_);
+
+    inspectorLayout->addWidget(new QLabel(tr("Text clip"), inspectorPanel));
+    clipTextEdit_ = new QLineEdit(inspectorPanel);
+    clipTextEdit_->setPlaceholderText(tr("Select a text clip, then edit here or press F2"));
+    clipTextEdit_->setEnabled(false);
+    inspectorLayout->addWidget(clipTextEdit_);
+    connect(clipTextEdit_, &QLineEdit::editingFinished, this, &MainWindow::onClipTextEdited);
 
     inspectorLayout->addWidget(new QLabel(tr("Adjustments"), inspectorPanel));
 
@@ -291,7 +368,17 @@ void MainWindow::buildDockPanels() {
     brightnessSlider_ = addSlider(tr("Brightness"), -100, 100, 0);
     contrastSlider_ = addSlider(tr("Contrast"), -100, 100, 0);
     saturationSlider_ = addSlider(tr("Saturation"), 0, 200, 100);
+    chromaKeySlider_ = addSlider(tr("Green screen strength"), 0, 100, 0);
     volumeSlider_ = addSlider(tr("Volume"), 0, 100, 85);
+
+    auto* brandRow = new QWidget(inspectorPanel);
+    auto* brandLayout = new QHBoxLayout(brandRow);
+    brandLayout->addWidget(new QLabel(tr("Brand kit"), brandRow));
+    auto* brandLogoBtn = new QPushButton(tr("Import logo"), brandRow);
+    brandLayout->addWidget(brandLogoBtn);
+    inspectorLayout->addWidget(brandRow);
+    connect(brandLogoBtn, &QPushButton::clicked, this, &MainWindow::onImportBrandLogo);
+
     inspectorLayout->addStretch();
 
     connect(brightnessSlider_, &QSlider::valueChanged, preview_,
@@ -300,6 +387,7 @@ void MainWindow::buildDockPanels() {
             &nova::renderer::VideoPreviewWidget::setContrast);
     connect(saturationSlider_, &QSlider::valueChanged, preview_,
             &nova::renderer::VideoPreviewWidget::setSaturation);
+    connect(chromaKeySlider_, &QSlider::valueChanged, this, &MainWindow::onChromaKeyChanged);
     connect(volumeSlider_, &QSlider::valueChanged, this, &MainWindow::onVolumeChanged);
 
     inspectorDock->setWidget(inspectorPanel);
@@ -313,33 +401,82 @@ void MainWindow::buildDockPanels() {
     auto* transportLayout = new QHBoxLayout(transportRow);
     playButton_ = new QPushButton(tr("Play"), transportRow);
     splitButton_ = new QPushButton(tr("Split"), transportRow);
+    deleteClipButton_ = new QPushButton(tr("Delete"), transportRow);
+    deleteClipButton_->setToolTip(tr("Delete selected clip (Del)"));
     extractAudioButton_ = new QPushButton(tr("Extract Audio"), transportRow);
     statusLabel_ = new QLabel(tr("No clip loaded"), transportRow);
     timeLabel_ = new QLabel(tr("00:00.00"), transportRow);
     timelineSelector_ = new QComboBox(transportRow);
-    auto* addTimelineButton = new QPushButton(tr("+ Timeline"), transportRow);
+    auto* addVideoTrackBtn = new QPushButton(tr("+ V"), transportRow);
+    auto* addAudioTrackBtn = new QPushButton(tr("+ A"), transportRow);
+    auto* addTextTrackBtn = new QPushButton(tr("+ T"), transportRow);
+    auto* addTimelineButton = new QPushButton(tr("+ Seq"), transportRow);
+    addVideoTrackBtn->setToolTip(tr("Add video track"));
+    addAudioTrackBtn->setToolTip(tr("Add audio track"));
+    addTextTrackBtn->setToolTip(tr("Add text track"));
 
     transportLayout->addWidget(playButton_);
     transportLayout->addWidget(splitButton_);
+    transportLayout->addWidget(deleteClipButton_);
     transportLayout->addWidget(extractAudioButton_);
+    transportLayout->addSpacing(8);
+    trimToolCombo_ = new QComboBox(transportRow);
+    trimToolCombo_->addItem(tr("Selection (V)"), static_cast<int>(nova::timeline::TrimTool::Selection));
+    trimToolCombo_->addItem(tr("Ripple (R)"), static_cast<int>(nova::timeline::TrimTool::Ripple));
+    trimToolCombo_->addItem(tr("Roll (N)"), static_cast<int>(nova::timeline::TrimTool::Roll));
+    trimToolCombo_->addItem(tr("Slip (Y)"), static_cast<int>(nova::timeline::TrimTool::Slip));
+    trimToolCombo_->addItem(tr("Slide (U)"), static_cast<int>(nova::timeline::TrimTool::Slide));
+    trimToolCombo_->setToolTip(tr("Premiere-style trim tools — drag clip edges or use keyboard shortcuts"));
+    transportLayout->addWidget(new QLabel(tr("Trim:"), transportRow));
+    transportLayout->addWidget(trimToolCombo_);
     transportLayout->addSpacing(12);
     transportLayout->addWidget(timeLabel_);
     transportLayout->addWidget(statusLabel_);
     transportLayout->addStretch();
     transportLayout->addWidget(new QLabel(tr("Sequence:"), transportRow));
     transportLayout->addWidget(timelineSelector_);
+    transportLayout->addWidget(addVideoTrackBtn);
+    transportLayout->addWidget(addAudioTrackBtn);
+    transportLayout->addWidget(addTextTrackBtn);
     transportLayout->addWidget(addTimelineButton);
 
     connect(playButton_, &QPushButton::clicked, this, &MainWindow::onPlayPauseClicked);
     connect(splitButton_, &QPushButton::clicked, this, &MainWindow::onSplitAtPlayhead);
+    connect(deleteClipButton_, &QPushButton::clicked, this, &MainWindow::onDeleteSelectedClip);
     connect(extractAudioButton_, &QPushButton::clicked, this, &MainWindow::onExtractAudio);
     connect(timelineSelector_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &MainWindow::onTimelineSelectionChanged);
     connect(addTimelineButton, &QPushButton::clicked, this, &MainWindow::onAddTimeline);
+    connect(addVideoTrackBtn, &QPushButton::clicked, this, &MainWindow::onAddVideoTrack);
+    connect(addAudioTrackBtn, &QPushButton::clicked, this, &MainWindow::onAddAudioTrack);
+    connect(addTextTrackBtn, &QPushButton::clicked, this, &MainWindow::onAddTextTrack);
 
     timelineWidget_ = new TimelineWidget(timelinePanel);
     connect(timelineWidget_, &TimelineWidget::seekRequested, this, &MainWindow::onTimelineSeek);
+    connect(timelineWidget_, &TimelineWidget::scrubbing, this, &MainWindow::onTimelineScrub);
+    connect(timelineWidget_, &TimelineWidget::timelineEdited, this, &MainWindow::onTimelineEdited);
+    connect(timelineWidget_, &TimelineWidget::selectionCleared, this, &MainWindow::onTimelineSelectionCleared);
+    connect(timelineWidget_, &TimelineWidget::deleteSelectedRequested, this, &MainWindow::onDeleteSelectedClip);
+    connect(timelineWidget_, &TimelineWidget::clipEditRequested, this, &MainWindow::onClipEditRequested);
     connect(timelineWidget_, &TimelineWidget::clipSelected, this, &MainWindow::onClipSelected);
+    connect(timelineWidget_, &TimelineWidget::trimToolChanged, this, &MainWindow::onTrimToolChanged);
+    connect(trimToolCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int index) {
+                if (!timelineWidget_ || index < 0) return;
+                const auto tool = static_cast<nova::timeline::TrimTool>(
+                    trimToolCombo_->itemData(index).toInt());
+                timelineWidget_->setTrimTool(tool);
+            });
+
+    auto* deleteShortcut = new QShortcut(QKeySequence::Delete, this);
+    deleteShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(deleteShortcut, &QShortcut::activated, this, &MainWindow::onDeleteSelectedClip);
+    auto* backspaceShortcut = new QShortcut(QKeySequence(Qt::Key_Backspace), this);
+    backspaceShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(backspaceShortcut, &QShortcut::activated, this, &MainWindow::onDeleteSelectedClip);
+    auto* editTextShortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
+    editTextShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(editTextShortcut, &QShortcut::activated, this, &MainWindow::editSelectedClipText);
 
     timelineLayout->addWidget(transportRow);
     timelineLayout->addWidget(timelineWidget_);
@@ -390,9 +527,27 @@ void MainWindow::showMediaMetadata(const QString& path) {
 void MainWindow::showClipMetadata(const nova::timeline::Clip& clip) {
     if (!clip.mediaPath.empty()) {
         showMediaMetadata(QString::fromStdString(clip.mediaPath));
+        if (clipTextEdit_) {
+            clipTextEdit_->clear();
+            clipTextEdit_->setEnabled(false);
+        }
+    } else if (clip.type == nova::timeline::ClipType::Title) {
+        mediaMetaLabel_->setText(tr("<b>Text clip</b><br>Style: %1")
+                                     .arg(QString::fromStdString(clip.stylePreset)));
+        if (clipTextEdit_) {
+            clipTextEdit_->setEnabled(true);
+            clipTextEdit_->blockSignals(true);
+            clipTextEdit_->setText(QString::fromStdString(
+                clip.overlayText.empty() ? clip.name : clip.overlayText));
+            clipTextEdit_->blockSignals(false);
+        }
     } else {
-        mediaMetaLabel_->setText(tr("<b>%1</b><br>Title overlay")
+        mediaMetaLabel_->setText(tr("<b>%1</b><br>Overlay clip")
                                      .arg(QString::fromStdString(clip.name)));
+        if (clipTextEdit_) {
+            clipTextEdit_->clear();
+            clipTextEdit_->setEnabled(false);
+        }
     }
     mediaMetaLabel_->setText(mediaMetaLabel_->text()
                              + tr("<br><br>Timeline: %1 - %2 frames")
@@ -517,7 +672,8 @@ void MainWindow::restoreProjectSession() {
     }
 
     if (!mediaToLoad.isEmpty()) {
-        previewMediaFile(mediaToLoad, project_->lastPlayheadSeconds);
+        previewMediaFile(mediaToLoad, 0.0);
+        seekToTimelinePosition(project_->lastPlayheadSeconds, false);
         showMediaMetadata(mediaToLoad);
 
         for (int i = 0; i < sidebar_->mediaList()->count(); ++i) {
@@ -828,8 +984,11 @@ void MainWindow::onImportMediaToFolder(const QString& folder) {
     importMediaFile(path, folder);
 }
 
-void MainWindow::importMediaFile(const QString& path, const QString& folder) {
+void MainWindow::ensureMediaInLibrary(const QString& path, const QString& folder) {
     if (!project_) return;
+    for (const auto& asset : project_->media) {
+        if (QString::fromStdString(asset.path) == path) return;
+    }
 
     const auto meta = nova::media::MediaProbe::probe(path.toStdString());
     nova::project::MediaAsset asset;
@@ -847,7 +1006,11 @@ void MainWindow::importMediaFile(const QString& path, const QString& folder) {
     project_->media.push_back(std::move(asset));
     markDirty();
     refreshMediaList();
-    previewMediaFile(path, 0.0);
+}
+
+void MainWindow::importMediaFile(const QString& path, const QString& folder) {
+    ensureMediaInLibrary(path, folder);
+    previewMediaFile(path, currentTimeSeconds_);
     showMediaMetadata(path);
     statusLabel_->setText(tr("Imported %1").arg(QFileInfo(path).fileName()));
 }
@@ -872,17 +1035,102 @@ void MainWindow::onMediaItemActivated() {
 void MainWindow::onClipSelected(const QString& clipId, const QString& mediaPath) {
     selectedClipId_ = clipId.toStdString();
     if (project_) project_->selectedClipId = selectedClipId_;
+    timelineWidget_->setSelectedClipId(selectedClipId_);
     if (const auto* clip = findClipById(selectedClipId_)) {
         showClipMetadata(*clip);
-        auto* timeline = activeTimeline();
-        if (timeline && timeline->frameRate() > 0) {
-            const double clipStart = clip->timelineStart / timeline->frameRate();
-            onTimelineSeek(clipStart);
+    }
+    seekToTimelinePosition(currentTimeSeconds_, false);
+    if (!mediaPath.isEmpty()) {
+        statusLabel_->setText(tr("Selected clip: %1").arg(QFileInfo(mediaPath).fileName()));
+    }
+}
+
+void MainWindow::onTimelineSelectionCleared() {
+    selectedClipId_.clear();
+    if (project_) project_->selectedClipId.clear();
+    timelineWidget_->setSelectedClipId("");
+    if (clipTextEdit_) {
+        clipTextEdit_->clear();
+        clipTextEdit_->setEnabled(false);
+    }
+    statusLabel_->setText(tr("Selection cleared"));
+}
+
+void MainWindow::onClipEditRequested(const QString& clipId) {
+    selectedClipId_ = clipId.toStdString();
+    if (project_) project_->selectedClipId = selectedClipId_;
+    timelineWidget_->setSelectedClipId(selectedClipId_);
+    if (const auto* clip = findClipById(selectedClipId_)) {
+        showClipMetadata(*clip);
+    }
+    editSelectedClipText();
+}
+
+void MainWindow::editSelectedClipText() {
+    if (selectedClipId_.empty()) {
+        statusLabel_->setText(tr("Select a text clip first"));
+        return;
+    }
+    const auto* clip = findClipById(selectedClipId_);
+    if (!clip || clip->type != nova::timeline::ClipType::Title) {
+        statusLabel_->setText(tr("Select a text clip to edit"));
+        return;
+    }
+
+    if (clipTextEdit_ && clipTextEdit_->isEnabled()) {
+        clipTextEdit_->setFocus();
+        clipTextEdit_->selectAll();
+        return;
+    }
+
+    bool ok = false;
+    const QString current = QString::fromStdString(
+        clip->overlayText.empty() ? clip->name : clip->overlayText);
+    const QString text = QInputDialog::getText(
+        this, tr("Edit text"), tr("Clip text:"), QLineEdit::Normal, current, &ok);
+    if (!ok || text.trimmed().isEmpty()) return;
+
+    auto* timeline = activeTimeline();
+    if (!timeline) return;
+
+    for (const auto& track : timeline->tracks()) {
+        if (nova::timeline::Clip* mutableClip = track->findClip(selectedClipId_)) {
+            mutableClip->overlayText = text.toStdString();
+            mutableClip->name = text.toStdString();
+            break;
         }
     }
-    if (!mediaPath.isEmpty()) {
-        previewMediaFile(mediaPath, currentTimeSeconds_);
+
+    timelineWidget_->setTimeline(timeline);
+    updateTitleOverlay();
+    showClipMetadata(*findClipById(selectedClipId_));
+    statusLabel_->setText(tr("Updated text: %1").arg(text));
+    markDirty();
+}
+
+void MainWindow::onClipTextEdited() {
+    if (!clipTextEdit_ || selectedClipId_.empty()) return;
+    const auto* clip = findClipById(selectedClipId_);
+    if (!clip || clip->type != nova::timeline::ClipType::Title) return;
+
+    const QString text = clipTextEdit_->text().trimmed();
+    if (text.isEmpty()) return;
+    if (text.toStdString() == clip->overlayText || text.toStdString() == clip->name) return;
+
+    auto* timeline = activeTimeline();
+    if (!timeline) return;
+
+    for (const auto& track : timeline->tracks()) {
+        if (nova::timeline::Clip* mutableClip = track->findClip(selectedClipId_)) {
+            mutableClip->overlayText = text.toStdString();
+            mutableClip->name = text.toStdString();
+            break;
+        }
     }
+
+    timelineWidget_->setTimeline(timeline);
+    updateTitleOverlay();
+    statusLabel_->setText(tr("Updated text: %1").arg(text));
     markDirty();
 }
 
@@ -912,10 +1160,62 @@ void MainWindow::onAddTimeline() {
     applyProjectToUi();
 }
 
+void MainWindow::onAddVideoTrack() {
+    auto* timeline = activeTimeline();
+    if (!timeline) return;
+    int n = 1;
+    for (const auto& track : timeline->tracks()) {
+        if (track->type() == nova::timeline::TrackType::Video) ++n;
+    }
+    const std::string id = "v" + std::to_string(n);
+    const std::string name = "V" + std::to_string(n);
+    timeline->addTrack(id, name, nova::timeline::TrackType::Video);
+    timelineWidget_->setTimeline(timeline);
+    markDirty();
+    applyProjectToUi();
+}
+
+void MainWindow::onAddAudioTrack() {
+    auto* timeline = activeTimeline();
+    if (!timeline) return;
+    int n = 1;
+    for (const auto& track : timeline->tracks()) {
+        if (track->type() == nova::timeline::TrackType::Audio) ++n;
+    }
+    const std::string id = "a" + std::to_string(n);
+    const std::string name = "A" + std::to_string(n);
+    timeline->addTrack(id, name, nova::timeline::TrackType::Audio);
+    timelineWidget_->setTimeline(timeline);
+    markDirty();
+    applyProjectToUi();
+}
+
+void MainWindow::onAddTextTrack() {
+    auto* timeline = activeTimeline();
+    if (!timeline) return;
+    int n = 1;
+    for (const auto& track : timeline->tracks()) {
+        if (track->type() == nova::timeline::TrackType::Subtitle) ++n;
+    }
+    const std::string id = "t" + std::to_string(n);
+    const std::string name = "T" + std::to_string(n);
+    timeline->addTrack(id, name, nova::timeline::TrackType::Subtitle);
+    timelineWidget_->setTimeline(timeline);
+    markDirty();
+    applyProjectToUi();
+}
+
 bool MainWindow::previewImageFile(const QString& path) {
-    QImageReader reader(path);
-    const QImage image = reader.read();
-    if (image.isNull()) return false;
+    QImage image;
+    if (path.endsWith(QStringLiteral(".bmp"), Qt::CaseInsensitive)) {
+        if (!nova::media::ImageIO::loadBmp(path.toStdString(), image) || image.isNull()) {
+            return false;
+        }
+    } else {
+        QImageReader reader(path);
+        image = reader.read();
+        if (image.isNull()) return false;
+    }
 
     const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
     nova::media::VideoFrame frame;
@@ -1063,22 +1363,16 @@ double MainWindow::masterClockSeconds() const {
 }
 
 void MainWindow::onPlayPauseClicked() {
-    if (!decoder_->isOpen()) return;
-
     playing_ = !playing_;
     playButton_->setText(playing_ ? tr("Pause") : tr("Play"));
 
     if (playing_) {
-        syncAudioToCurrentTime();
-        if (audioPlayer_ && decoder_->info().hasAudio) {
-            audioPlayer_->play();
-        }
-        // Anchor the master clock to the current media time.
+        activePlaybackClipId_.clear();
+        pendingFrame_.reset();
         playbackStartSeconds_ = currentTimeSeconds_;
         playbackClock_.restart();
-        pendingFrame_.reset();
-        // Tick well above the frame rate so we can present frames precisely
-        // when they come due rather than one-frame-per-tick.
+        presentTimelineAt(currentTimeSeconds_, true);
+        syncTimelineAudioAt(currentTimeSeconds_, true);
         playbackTimer_.start(5);
     } else {
         playbackTimer_.stop();
@@ -1087,93 +1381,202 @@ void MainWindow::onPlayPauseClicked() {
 }
 
 void MainWindow::onPlaybackTick() {
-    const double target = masterClockSeconds();
+    const double timelinePos = playbackStartSeconds_ + playbackClock_.elapsed() / 1000.0;
+    const double duration = timelineDurationSeconds();
 
-    // Present the latest frame whose PTS is at or before the master clock,
-    // decoding ahead and dropping frames that fell behind. Hold the current
-    // frame if the next decoded one isn't due yet.
-    std::optional<nova::media::VideoFrame> toShow;
-    bool reachedEnd = false;
+    if (duration > 0.0 && timelinePos >= duration) {
+        presentTimelineAt(duration, false);
+        syncTimelineAudioAt(duration, false);
+        currentTimeSeconds_ = duration;
+        timelineWidget_->setPlayheadSeconds(duration);
+        timeLabel_->setText(tr("%1s").arg(duration, 0, 'f', 2));
+        playbackTimer_.stop();
+        playing_ = false;
+        playButton_->setText(tr("Play"));
+        if (audioPlayer_) audioPlayer_->pause();
+        return;
+    }
+
+    presentTimelineAt(timelinePos, true);
+    syncTimelineAudioAt(timelinePos, true);
+}
+
+void MainWindow::onTimelineScrub(double seconds) {
+    if (!scrubbingActive_) {
+        scrubbingActive_ = true;
+        wasPlayingBeforeScrub_ = playing_;
+        if (playing_) {
+            playbackTimer_.stop();
+            if (audioPlayer_) audioPlayer_->pause();
+            playing_ = false;
+            playButton_->setText(tr("Play"));
+        }
+    }
+    seekToTimelinePosition(seconds, false);
+}
+
+void MainWindow::onTimelineEdited() {
+    if (auto* timeline = activeTimeline()) {
+        timelineWidget_->setTimeline(timeline);
+    }
+    markDirty();
+}
+
+void MainWindow::seekToTimelinePosition(double seconds, bool resumePlayback) {
+    presentTimelineAt(seconds, false);
+    syncTimelineAudioAt(seconds, resumePlayback);
+    playbackStartSeconds_ = seconds;
+    playbackClock_.restart();
+
+    if (resumePlayback) {
+        playing_ = true;
+        playButton_->setText(tr("Pause"));
+        playbackTimer_.start(5);
+    }
+}
+
+void MainWindow::onTimelineSeek(double seconds) {
+    scrubbingActive_ = false;
+    const bool resume = wasPlayingBeforeScrub_;
+    wasPlayingBeforeScrub_ = false;
+    seekToTimelinePosition(seconds, resume);
+}
+
+void MainWindow::syncAudioToCurrentTime() {
+    syncTimelineAudioAt(currentTimeSeconds_, playing_);
+}
+
+double MainWindow::clipSourceSeconds(const nova::timeline::Clip& clip,
+                                     double timelineSeconds) const {
+    const auto* timeline = project_ ? project_->activeTimeline() : nullptr;
+    const double fps = timeline && timeline->frameRate() > 0 ? timeline->frameRate() : 30.0;
+    const double clipStartSec = clip.timelineStart / fps;
+    const double offsetInClip = timelineSeconds - clipStartSec;
+    return (clip.sourceIn / fps) + offsetInClip;
+}
+
+double MainWindow::timelineDurationSeconds() const {
+    const auto* timeline = project_ ? project_->activeTimeline() : nullptr;
+    return timeline ? timeline->durationSeconds() : 0.0;
+}
+
+const nova::timeline::Clip* MainWindow::findAudioClipAt(double seconds) const {
+    const auto* timeline = project_ ? project_->activeTimeline() : nullptr;
+    if (!timeline) return nullptr;
+    const auto frame = static_cast<nova::timeline::FrameNumber>(
+        std::llround(seconds * timeline->frameRate()));
+    for (const auto& track : timeline->tracks()) {
+        if (track->type() != nova::timeline::TrackType::Audio) continue;
+        if (const auto* clip = track->findClipAt(frame)) return clip;
+    }
+    return nullptr;
+}
+
+void MainWindow::showBlackPreview() {
+    const auto* timeline = activeTimeline();
+    const int width = timeline && timeline->width() > 0 ? timeline->width() : 1920;
+    const int height = timeline && timeline->height() > 0 ? timeline->height() : 1080;
+
+    nova::media::VideoFrame frame;
+    frame.width = width;
+    frame.height = height;
+    frame.timeSeconds = currentTimeSeconds_;
+    frame.rgba.assign(static_cast<size_t>(width) * static_cast<size_t>(height) * 4, 0);
+    preview_->setFrame(frame);
+    activePlaybackClipId_.clear();
+    pendingFrame_.reset();
+}
+
+void MainWindow::presentTimelineAt(double timelineSeconds, bool advanceDecoder) {
+    currentTimeSeconds_ = std::max(0.0, timelineSeconds);
+    timelineWidget_->setPlayheadSeconds(currentTimeSeconds_);
+    timeLabel_->setText(tr("%1s").arg(currentTimeSeconds_, 0, 'f', 2));
+    updateTitleOverlay();
+
+    const auto* clip = findVideoClipAt(currentTimeSeconds_);
+    if (!clip || clip->mediaPath.empty()) {
+        showBlackPreview();
+        updatePreviewEffects();
+        return;
+    }
+
+    const double sourceSeek = clipSourceSeconds(*clip, currentTimeSeconds_);
+    const QString mediaPath = QString::fromStdString(clip->mediaPath);
+    const auto meta = nova::media::MediaProbe::probe(clip->mediaPath);
+
+    if (meta.isImage) {
+        if (currentMediaPath_ != mediaPath || activePlaybackClipId_ != clip->id) {
+            previewImageFile(mediaPath);
+            activePlaybackClipId_ = clip->id;
+        }
+        currentTimeSeconds_ = timelineSeconds;
+        timelineWidget_->setPlayheadSeconds(currentTimeSeconds_);
+        updatePreviewEffects();
+        return;
+    }
+
+    const bool clipChanged =
+        activePlaybackClipId_ != clip->id || currentMediaPath_ != mediaPath || !decoder_->isOpen();
+    if (clipChanged) {
+        if (!decoder_->open(clip->mediaPath)) {
+            showBlackPreview();
+            updatePreviewEffects();
+            return;
+        }
+        currentMediaPath_ = mediaPath;
+        activePlaybackClipId_ = clip->id;
+        decoder_->seek(sourceSeek);
+        pendingFrame_.reset();
+    } else if (!advanceDecoder) {
+        decoder_->seek(sourceSeek);
+        pendingFrame_.reset();
+        if (auto frame = decoder_->nextFrame()) {
+            preview_->setFrame(*frame);
+        }
+        updatePreviewEffects();
+        return;
+    }
 
     while (true) {
         if (!pendingFrame_) {
             pendingFrame_ = decoder_->nextFrame();
-            if (!pendingFrame_) {
-                reachedEnd = true;
-                break;
-            }
+            if (!pendingFrame_) break;
         }
-        if (pendingFrame_->timeSeconds <= target) {
-            toShow = std::move(pendingFrame_);
+        if (pendingFrame_->timeSeconds <= sourceSeek) {
+            preview_->setFrame(*pendingFrame_);
             pendingFrame_.reset();
-            // Keep draining until we reach a frame that's still in the future,
-            // so we drop stale frames instead of falling behind.
             continue;
         }
-        break; // next frame not due yet
+        break;
     }
-
-    if (reachedEnd && !toShow) {
-        // Loop back to the start, restarting both clocks in lock-step.
-        decoder_->seek(0.0);
-        pendingFrame_.reset();
-        currentTimeSeconds_ = 0.0;
-        playbackStartSeconds_ = 0.0;
-        playbackClock_.restart();
-        if (audioPlayer_ && decoder_->info().hasAudio) {
-            audioPlayer_->setPosition(0);
-            audioPlayer_->play();
-        } else if (audioPlayer_) {
-            audioPlayer_->stop();
-        }
-        auto frame = decoder_->nextFrame();
-        if (!frame) {
-            playbackTimer_.stop();
-            if (audioPlayer_) audioPlayer_->stop();
-            playing_ = false;
-            playButton_->setText(tr("Play"));
-            return;
-        }
-        toShow = std::move(frame);
-    }
-
-    if (!toShow) return; // nothing due this tick; hold current frame
-
-    preview_->setFrame(*toShow);
-    currentTimeSeconds_ = toShow->timeSeconds;
-    timelineWidget_->setPlayheadSeconds(currentTimeSeconds_);
-    timeLabel_->setText(tr("%1s").arg(currentTimeSeconds_, 0, 'f', 2));
     updatePreviewEffects();
-    updateTitleOverlay();
 }
 
-void MainWindow::onTimelineSeek(double seconds) {
-    if (!decoder_->isOpen()) return;
-    const bool wasPlaying = playing_;
-    if (audioPlayer_) audioPlayer_->pause();
-    decoder_->seek(seconds);
-    pendingFrame_.reset();
-    if (auto frame = decoder_->nextFrame()) {
-        preview_->setFrame(*frame);
-        currentTimeSeconds_ = frame->timeSeconds;
-        timelineWidget_->setPlayheadSeconds(currentTimeSeconds_);
-        timeLabel_->setText(tr("%1s").arg(currentTimeSeconds_, 0, 'f', 2));
-        syncAudioToCurrentTime();
-        updatePreviewEffects();
-        updateTitleOverlay();
-        // Re-anchor the master clock to the new position so playback resumes
-        // in sync rather than jumping by the seek delta.
-        playbackStartSeconds_ = currentTimeSeconds_;
-        playbackClock_.restart();
-        if (wasPlaying && audioPlayer_ && decoder_->info().hasAudio) {
-            audioPlayer_->play();
+void MainWindow::syncTimelineAudioAt(double timelineSeconds, bool shouldPlay) {
+    if (!audioPlayer_) return;
+
+    const auto* clip = findAudioClipAt(timelineSeconds);
+    if (!clip || clip->mediaPath.empty()) {
+        audioPlayer_->pause();
+        currentAudioPath_.clear();
+        return;
+    }
+
+    const double sourceSeek = clipSourceSeconds(*clip, timelineSeconds);
+    const QString path = QString::fromStdString(clip->mediaPath);
+    if (currentAudioPath_ != path) {
+        audioPlayer_->setSource(QUrl::fromLocalFile(path));
+        currentAudioPath_ = path;
+        audioPlayer_->setPosition(static_cast<qint64>(std::max(0.0, sourceSeek) * 1000.0));
+    } else {
+        const qint64 targetMs = static_cast<qint64>(std::max(0.0, sourceSeek) * 1000.0);
+        if (std::abs(audioPlayer_->position() - targetMs) > 250) {
+            audioPlayer_->setPosition(targetMs);
         }
     }
-}
 
-void MainWindow::syncAudioToCurrentTime() {
-    if (!audioPlayer_) return;
-    audioPlayer_->setPosition(static_cast<qint64>(std::max(0.0, currentTimeSeconds_) * 1000.0));
+    if (shouldPlay) audioPlayer_->play();
+    else audioPlayer_->pause();
 }
 
 void MainWindow::onVolumeChanged(int value) {
@@ -1237,6 +1640,7 @@ void MainWindow::onDeleteSelectedClip() {
     if (project_) project_->selectedClipId.clear();
     timelineWidget_->setSelectedClipId("");
     timelineWidget_->setTimeline(timeline);
+    timelineWidget_->setFocus();
     statusLabel_->setText(tr("Clip deleted"));
     markDirty();
 }
@@ -1341,7 +1745,11 @@ void MainWindow::updatePreviewEffects() {
     preview_->setDipMix(0.0f, false);
 
     const auto* clip = findVideoClipAt(currentTimeSeconds_);
-    if (!clip || !activeTimeline()) return;
+    if (!clip || !activeTimeline()) {
+        preview_->setRotationDegrees(0.0f);
+        preview_->setChromaKey(0.0f, 0.0f, 1.0f, 0.0f);
+        return;
+    }
 
     const double fps = activeTimeline()->frameRate();
     const double clipStart = clip->timelineStart / fps;
@@ -1382,6 +1790,9 @@ void MainWindow::updatePreviewEffects() {
 
     preview_->setClipOpacity(opacity);
     preview_->setDipMix(dipMix, dipWhite);
+    preview_->setRotationDegrees(static_cast<float>(clip->rotationDegrees));
+    preview_->setChromaKey(clip->chromaKeyEnabled ? static_cast<float>(clip->chromaKeyStrength) : 0.0f,
+                           0.0f, 1.0f, 0.0f);
 }
 
 void MainWindow::updateTitleOverlay() {
@@ -1480,37 +1891,270 @@ void MainWindow::onTransitionActivated(const QString& transitionId) {
 }
 
 QString MainWindow::ensureStockAsset(const QString& assetId) {
+    const QByteArray idBytes = assetId.toUtf8();
+    const nova::media::StockAssetDef* def =
+        nova::media::findStockAsset(idBytes.constData());
+    if (!def) return {};
+
     const QString cacheDir =
         QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/stock";
-    QDir().mkpath(cacheDir);
+    if (!QDir().mkpath(cacheDir)) return {};
 
-    QColor color(0, 0, 0);
-    QString fileName = assetId + ".png";
-    if (assetId == "white-5s") color = QColor(255, 255, 255);
-    else if (assetId == "blue-5s") color = QColor(30, 90, 200);
-    else if (assetId == "gray-5s") color = QColor(120, 120, 125);
-    else if (assetId == "red-5s") color = QColor(180, 40, 40);
+    const QString extension = def->isVideo ? QStringLiteral(".mp4") : QStringLiteral(".bmp");
+    const QString path = QDir(cacheDir).filePath(assetId + extension);
+    if (QFileInfo(path).exists() && QFileInfo(path).size() > 0) return path;
 
-    const QString path = cacheDir + "/" + fileName;
-    if (!QFileInfo::exists(path)) {
-        QImage img(1920, 1080, QImage::Format_RGB32);
-        img.fill(color);
-        img.save(path);
-    }
-    return path;
+    const std::string label = def->label;
+    const bool ok = def->isVideo
+                        ? (assetId == QStringLiteral("gradient-5s")
+                               ? nova::media::StockAssetGenerator::generateGradientVideo(
+                                     path.toStdString(), def->r, def->g, def->b, label)
+                               : nova::media::StockAssetGenerator::generateParticlesVideo(
+                                     path.toStdString(), def->r, def->g, def->b, label))
+                        : nova::media::StockAssetGenerator::generateColorPlate(
+                              path.toStdString(), def->r, def->g, def->b, label);
+    if (!ok) QFile::remove(path);
+    return ok && QFileInfo(path).size() > 0 ? path : QString();
 }
 
 void MainWindow::onLibraryAssetActivated(const QString& assetId) {
     const QString path = ensureStockAsset(assetId);
-    importMediaFile(path, QStringLiteral("Stock"));
+    if (path.isEmpty()) {
+        statusLabel_->setText(tr("Could not create stock asset"));
+        QMessageBox::warning(this, tr("Stock asset failed"),
+                             tr("Could not generate stock asset:\n%1").arg(assetId));
+        return;
+    }
+
+    const double insertAt = currentTimeSeconds_;
+    ensureMediaInLibrary(path, QStringLiteral("Stock"));
     addMediaToTimeline(path);
-    previewImageFile(path);
+    seekToTimelinePosition(insertAt, false);
     statusLabel_->setText(tr("Inserted stock clip at playhead"));
+}
+
+void MainWindow::onRecordRequested(int mode) {
+    if (!mediaRecorder_) return;
+    const QString dir = project_ && !project_->filePath.empty()
+                            ? QDir(QFileInfo(QString::fromStdString(project_->filePath)).absolutePath())
+                                  .filePath(QStringLiteral("recordings"))
+                            : QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                  + QStringLiteral("/Nova Studio/recordings");
+    const auto recordMode = static_cast<nova::media::RecordMode>(mode);
+    if (mediaRecorder_->startRecording(recordMode, dir).isEmpty()) {
+        QMessageBox::warning(this, tr("Record"),
+                             tr("Could not start recording. Check camera/microphone permissions."));
+    }
+}
+
+void MainWindow::onStopRecordRequested() {
+    if (mediaRecorder_) mediaRecorder_->stopRecording();
+}
+
+void MainWindow::onAiToolRequested(const QString& toolId) {
+    QMessageBox::information(
+        this, tr("AI plugin"),
+        tr("'%1' is available through the optional Nova AI plugin.\n\n"
+           "The core editor stays fast and offline-first. See docs/FEATURES.md for details.")
+            .arg(toolId));
+}
+
+void MainWindow::onExportMp3() {
+    QString inputPath = currentMediaPath_;
+    double startSec = 0.0;
+    double endSec = 0.0;
+    if (const auto* clip = findVideoClipAt(currentTimeSeconds_)) {
+        inputPath = QString::fromStdString(clip->mediaPath);
+        const auto* timeline = activeTimeline();
+        const double fps = timeline ? timeline->frameRate() : 30.0;
+        startSec = clip->sourceIn / fps;
+        endSec = clip->sourceOut / fps;
+    }
+    if (inputPath.isEmpty()) {
+        QMessageBox::information(this, tr("Export MP3"), tr("Select or load a clip with audio first."));
+        return;
+    }
+
+    QString path = QFileDialog::getSaveFileName(this, tr("Export MP3"), QString(), tr("MP3 Audio (*.mp3)"));
+    if (path.isEmpty()) return;
+    if (!path.endsWith(".mp3", Qt::CaseInsensitive)) path += ".mp3";
+
+    nova::media::AudioExporter exporter;
+    std::string error;
+    if (!exporter.exportMp3(inputPath.toStdString(), path.toStdString(), startSec,
+                            endSec > startSec ? endSec : 0.0, &error)) {
+        QMessageBox::warning(this, tr("Export MP3 failed"), QString::fromStdString(error));
+        return;
+    }
+    QMessageBox::information(this, tr("Export complete"), tr("Saved:\n%1").arg(path));
+}
+
+void MainWindow::onExportGif() {
+    QString inputPath = currentMediaPath_;
+    double startSec = currentTimeSeconds_;
+    double endSec = startSec + 3.0;
+    if (const auto* clip = findVideoClipAt(currentTimeSeconds_)) {
+        inputPath = QString::fromStdString(clip->mediaPath);
+        const auto* timeline = activeTimeline();
+        const double fps = timeline ? timeline->frameRate() : 30.0;
+        startSec = clip->timelineStart / fps;
+        endSec = clip->timelineEnd / fps;
+    }
+    if (inputPath.isEmpty()) {
+        QMessageBox::information(this, tr("Export GIF"), tr("Select a video clip first."));
+        return;
+    }
+
+    QString path = QFileDialog::getSaveFileName(this, tr("Export GIF"), QString(), tr("GIF (*.gif)"));
+    if (path.isEmpty()) return;
+    if (!path.endsWith(".gif", Qt::CaseInsensitive)) path += ".gif";
+
+    nova::media::GifExporter exporter;
+    std::string error;
+    if (!exporter.exportGif(inputPath.toStdString(), path.toStdString(), startSec, endSec, 10, 640,
+                            &error)) {
+        QMessageBox::warning(this, tr("Export GIF failed"), QString::fromStdString(error));
+        return;
+    }
+    QMessageBox::information(this, tr("Export complete"), tr("Saved:\n%1").arg(path));
+}
+
+void MainWindow::onTrimStartAtPlayhead() {
+    auto* timeline = activeTimeline();
+    if (!timeline || selectedClipId_.empty()) {
+        statusLabel_->setText(tr("Select a clip to trim"));
+        return;
+    }
+    const auto frame = static_cast<nova::timeline::FrameNumber>(
+        std::llround(currentTimeSeconds_ * timeline->frameRate()));
+    const auto tool = timelineWidget_ ? timelineWidget_->trimTool()
+                                      : nova::timeline::TrimTool::Selection;
+    if (timeline->trimClipStartWithTool(selectedClipId_, frame, tool)) {
+        timelineWidget_->setTimeline(timeline);
+        markDirty();
+        statusLabel_->setText(tr("Trimmed clip start at playhead"));
+        return;
+    }
+    statusLabel_->setText(tr("Move playhead inside the selected clip to trim"));
+}
+
+void MainWindow::onTrimEndAtPlayhead() {
+    auto* timeline = activeTimeline();
+    if (!timeline || selectedClipId_.empty()) {
+        statusLabel_->setText(tr("Select a clip to trim"));
+        return;
+    }
+    const auto frame = static_cast<nova::timeline::FrameNumber>(
+        std::llround(currentTimeSeconds_ * timeline->frameRate()));
+    const auto tool = timelineWidget_ ? timelineWidget_->trimTool()
+                                      : nova::timeline::TrimTool::Selection;
+    if (timeline->trimClipEndWithTool(selectedClipId_, frame, tool)) {
+        timelineWidget_->setTimeline(timeline);
+        markDirty();
+        statusLabel_->setText(tr("Trimmed clip end at playhead"));
+        return;
+    }
+    statusLabel_->setText(tr("Move playhead inside the selected clip to trim"));
+}
+
+void MainWindow::onTrimToolChanged(nova::timeline::TrimTool tool) {
+    if (!trimToolCombo_) return;
+    for (int i = 0; i < trimToolCombo_->count(); ++i) {
+        if (trimToolCombo_->itemData(i).toInt() == static_cast<int>(tool)) {
+            if (trimToolCombo_->currentIndex() != i) {
+                trimToolCombo_->blockSignals(true);
+                trimToolCombo_->setCurrentIndex(i);
+                trimToolCombo_->blockSignals(false);
+            }
+            break;
+        }
+    }
+    static const char* kNames[] = {"Selection", "Ripple", "Roll", "Slip", "Slide"};
+    const int idx = static_cast<int>(tool);
+    if (idx >= 0 && idx < 5) {
+        statusLabel_->setText(tr("Trim tool: %1").arg(tr(kNames[idx])));
+    }
+}
+
+void MainWindow::onRotateClip() {
+    if (selectedClipId_.empty()) {
+        statusLabel_->setText(tr("Select a clip to rotate"));
+        return;
+    }
+    auto* timeline = activeTimeline();
+    if (!timeline) return;
+    for (const auto& track : timeline->tracks()) {
+        if (nova::timeline::Clip* clip = track->findClip(selectedClipId_)) {
+            clip->rotationDegrees = std::fmod(clip->rotationDegrees + 90.0, 360.0);
+            timelineWidget_->setTimeline(timeline);
+            updatePreviewEffects();
+            markDirty();
+            statusLabel_->setText(tr("Rotated to %1°").arg(clip->rotationDegrees, 0, 'f', 0));
+            return;
+        }
+    }
+}
+
+void MainWindow::onRemoveAudioFromClip() {
+    if (selectedClipId_.empty()) {
+        statusLabel_->setText(tr("Select a video clip first"));
+        return;
+    }
+    auto* timeline = activeTimeline();
+    if (!timeline) return;
+
+    const nova::timeline::Clip* clip = findClipById(selectedClipId_);
+    if (!clip) return;
+    std::optional<std::string> linkedId = clip->linkedClipId;
+
+    for (const auto& track : timeline->tracks()) {
+        if (linkedId) track->removeClip(*linkedId);
+        if (nova::timeline::Clip* mutableClip = track->findClip(selectedClipId_)) {
+            mutableClip->linkedClipId.reset();
+        }
+    }
+    timelineWidget_->setTimeline(timeline);
+    markDirty();
+    statusLabel_->setText(tr("Audio removed from clip"));
+}
+
+void MainWindow::onImportBrandLogo() {
+    if (!project_) return;
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Import brand logo"), QString(),
+        tr("Images (*.png *.jpg *.jpeg *.svg *.bmp);;All Files (*)"));
+    if (path.isEmpty()) return;
+    project_->brand.logoPath = path.toStdString();
+    markDirty();
+    statusLabel_->setText(tr("Brand logo set: %1").arg(QFileInfo(path).fileName()));
+}
+
+void MainWindow::onChromaKeyChanged(int value) {
+    if (selectedClipId_.empty()) {
+        preview_->setChromaKey(value / 100.0f, 0.0f, 1.0f, 0.0f);
+        return;
+    }
+    auto* timeline = activeTimeline();
+    if (!timeline) return;
+    for (const auto& track : timeline->tracks()) {
+        if (nova::timeline::Clip* clip = track->findClip(selectedClipId_)) {
+            clip->chromaKeyEnabled = value > 0;
+            clip->chromaKeyStrength = value / 100.0;
+            updatePreviewEffects();
+            markDirty();
+            return;
+        }
+    }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Delete) {
         onDeleteSelectedClip();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_F2) {
+        editSelectedClipText();
         event->accept();
         return;
     }

@@ -29,6 +29,12 @@ struct ProjectMetadata {
     std::string modifiedIso;
 };
 
+struct BrandKit {
+    std::string logoPath;
+    std::string primaryColor = "#4a69d4";
+    std::string fontFamily = "Segoe UI";
+};
+
 // A Nova Studio project: media bin, one or more timelines, and metadata.
 // Serialized as JSON (.nova). Runtime-only fields (filePath, dirty) are not
 // written to disk.
@@ -39,6 +45,7 @@ struct Project {
     std::vector<MediaAsset> media;
     std::vector<std::unique_ptr<nova::timeline::Timeline>> timelines;
     std::string activeTimelineId;
+    BrandKit brand;
 
     std::string filePath;
     bool dirty = false;
