@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "name": "Vertical Reels 9:16",
+  "metadata": {
+    "author": "",
+    "description": "Instagram Reels / TikTok vertical template",
+    "created": "2026-01-01T00:00:00Z",
+    "modified": "2026-01-01T00:00:00Z"
+  },
+  "media": [],
+  "timelines": [
+    {
+      "id": "seq-1",
+      "name": "Reels",
+      "frameRate": 30,
+      "width": 1080,
+      "height": 1920,
+      "tracks": [
+        {
+          "id": "v1",
+          "name": "V1",
+          "type": "video",
+          "locked": false,
+          "muted": false,
+          "solo": false,
+          "clips": []
+        },
+        {
+          "id": "a1",
+          "name": "A1",
+          "type": "audio",
+          "locked": false,
+          "muted": false,
+          "solo": false,
+          "clips": []
+        }
+      ]
+    }
+  ],
+  "activeTimelineId": "seq-1"
+}

@@ -43,6 +43,15 @@ target_compile_features(nova_core INTERFACE cxx_std_23)
 add_library(nova_timeline INTERFACE)
 target_link_libraries(nova_timeline INTERFACE nova_core)
 
+# --- nova_project: project file I/O, autosave, backups ---
+add_library(nova_project STATIC
+    src/project/Project.cpp
+    src/project/ProjectIO.cpp
+    src/project/ProjectStore.cpp
+)
+target_include_directories(nova_project PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(nova_project PUBLIC nova_core nova_timeline Qt6::Core)
+
 # --- nova_media: FFmpeg decode wrapper ---
 add_library(nova_media STATIC
     src/media/Decoder.cpp
@@ -63,11 +72,15 @@ target_link_libraries(nova_renderer PUBLIC nova_core nova_media Qt6::Widgets Qt6
 add_library(nova_ui STATIC
     src/ui/MainWindow.cpp
     src/ui/TimelineWidget.cpp
+    src/ui/SidebarPanel.cpp
+    src/ui/ProjectWelcomeDialog.cpp
     include/nova/ui/MainWindow.h
     include/nova/ui/TimelineWidget.h
+    include/nova/ui/SidebarPanel.h
+    include/nova/ui/ProjectWelcomeDialog.h
 )
 target_include_directories(nova_ui PUBLIC ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(nova_ui PUBLIC nova_core nova_timeline nova_media nova_renderer Qt6::Widgets Qt6::OpenGLWidgets Qt6::Multimedia)
+target_link_libraries(nova_ui PUBLIC nova_core nova_timeline nova_project nova_media nova_renderer Qt6::Widgets Qt6::OpenGLWidgets Qt6::Multimedia)
 
 # --- nova_studio: application executable ---
 add_executable(nova_studio src/app/main.cpp)
@@ -83,3 +96,4 @@ if(NOVA_BUILD_TESTS)
 endif()
 
 install(TARGETS nova_studio RUNTIME DESTINATION bin BUNDLE DESTINATION .)
+install(DIRECTORY templates/ DESTINATION share/nova-studio/templates)

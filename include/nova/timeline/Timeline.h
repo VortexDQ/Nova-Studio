@@ -176,6 +176,8 @@ public:
 
     const std::vector<std::unique_ptr<Track>>& tracks() const { return tracks_; }
 
+    void clearTracks() { tracks_.clear(); }
+
     FrameNumber durationFrames() const {
         FrameNumber maxEnd = 0;
         for (const auto& track : tracks_) {

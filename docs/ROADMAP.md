@@ -1,67 +1,224 @@
 # Roadmap
 
-This maps the full Nova Studio vision onto milestones, starting from the
-vertical slice in this repository. Rough sizing is in engineer-weeks for a
-single experienced C++/graphics engineer; parallelize across a team to
-compress wall-clock time.
+This maps the full Nova Studio vision onto milestones. Rough sizing is in
+engineer-weeks for a single experienced C++/graphics engineer; parallelize
+across a team to compress wall-clock time.
+
+**Legend:** ✅ shipped in this repo · 🚧 in progress · ⬜ planned
+
+---
+
+## Current vertical slice (shipped)
+
+| Area | Status |
+|------|--------|
+| FFmpeg decode + GPU preview | ✅ |
+| Basic timeline (tracks, clips, split, ripple-trim API) | ✅ |
+| Audio playback (Qt Multimedia) + extract to WAV | ✅ |
+| Dark editor shell + Clipchamp-style sidebar rail | ✅ |
+| **Project file (.nova JSON)** — save/open, autosave, backups, version restore | ✅ |
+| **Recent projects** + welcome screen | ✅ |
+| **Multiple timelines per project** | ✅ |
+| **Media library** — import, folders, tags, search, metadata probe | ✅ (basic) |
+| **Project templates** — blank 1080p, vertical reels, YouTube | ✅ |
+| Local offline projects (no cloud required) | ✅ |
+
+---
+
+## Milestone A — Project & media foundation (~2-3 weeks)
+
+Expand what `.nova` projects can express and how media is managed offline.
+
+| Feature | Status |
+|---------|--------|
+| New / open / save / save as | ✅ |
+| Autosave (`.autosave.nova`) | ✅ |
+| Rolling backups on save (`*_backups/`) | ✅ |
+| Version history restore | ✅ |
+| Recent projects | ✅ |
+| Project templates | ✅ |
+| Multiple timelines | ✅ |
+| Import/export project copy | ✅ |
+| Project metadata (author, description, timestamps) | ✅ |
+| Media folders, tags, in-project search | ✅ (basic) |
+| Thumbnail previews | ⬜ |
+| Video preview in media bin | ⬜ |
+| Waveform generation | ⬜ |
+| Proxy generation on import | ⬜ |
+| Media relinking + offline detection | ⬜ |
+| Project archive (zip bundle) | ⬜ |
+| Cloud sync (optional plugin) | ⬜ future |
+
+**Supported import formats (via FFmpeg, expand testing):** MP4, MOV, MKV, AVI,
+WebM, GIF, PNG, JPG, SVG, WAV, MP3, FLAC, SRT/VTT subtitles. ProRes, H.264,
+H.265, AV1, VP9 depend on FFmpeg build — validated per platform in CI.
+
+---
 
 ## Milestone 1 — Timeline interaction layer (~3-4 weeks)
-- Drag-to-move clips, blade/split, ripple/roll/slip/slide trim via mouse
-- Multi-clip selection, grouping, snapping, magnetic timeline
-- Undo/redo (command pattern over `Timeline` mutations)
-- Markers, color labels, track lock/solo/mute wired into playback
+
+| Feature | Status |
+|---------|--------|
+| Drag-to-move clips | ⬜ |
+| Blade/split at playhead | ✅ |
+| Ripple / roll / slip / slide trim | ⬜ (API partial: ripple-trim) |
+| Multi-clip selection, grouping | ⬜ |
+| Snapping, magnetic timeline | ⬜ |
+| Markers, color labels | ⬜ |
+| Track lock / solo / mute in UI | ⬜ (model exists) |
+| Track colors, naming, grouping | ⬜ |
+| Unlimited video/audio tracks | ⬜ (model supports many tracks) |
+| Nested sequences / compound clips | ⬜ (model hook exists) |
+| Multicam | ⬜ |
+| Adjustment layers, pre-compositions | ⬜ |
+| Timeline zoom + search | ⬜ |
+
+---
 
 ## Milestone 2 — Audio pipeline (~4-6 weeks)
-- `nova_audio` module: decode via FFmpeg audio streams, resample (libswresample)
-- Real-time mixer (per-clip gain/pan, master bus)
-- Waveform generation and display in the timeline lanes
-- Sync playback clock across video + audio (this is the trickiest part —
-  budget extra time for A/V sync correctness under variable-speed playback)
 
-## Milestone 3 — Effect graph (~6-8 weeks)
-- Generalize the single shader pass into a node graph: multiple stacked,
-  reorderable, keyframeable effects rendered via ping-ponged FBOs
-- Port the existing brightness/contrast/saturation shader into a node
-- Add: blur, sharpen, LUT application, transform/crop/mask, chroma key
-- Effect parameter keyframing (linear/bezier/ease interpolation) feeding
-  into the Inspector's existing slider wiring
+| Feature | Status |
+|---------|--------|
+| Qt Multimedia preview sync | ✅ (single-clip) |
+| `nova_audio` FFmpeg decode + mixer | ⬜ |
+| Per-clip gain/pan, master bus | ⬜ |
+| Waveform lanes | ⬜ |
+| Fade in/out, ducking, EQ, compressor | ⬜ |
+| Noise removal, voice enhancement | ⬜ |
+| Beat detection | ⬜ |
+| Surround / stereo control | ⬜ |
+| AI voice cleanup, auto subtitles | ⬜ plugin |
 
-## Milestone 4 — Proxy & background rendering (~3-4 weeks)
-- Background proxy transcode (lower-res H.264/ProRes proxy) on import
-- Frame cache (RAM + disk tiers) in a dedicated `playback` module
-- Background/incremental render queue with pause/resume/cancel/priority
+---
 
-## Milestone 5 — Plugin SDK (~4-6 weeks)
-- Stable C ABI for dynamically loaded effect/transition/exporter plugins
-  (dlopen/LoadLibrary), versioned so plugins don't need app recompiles
-- Example plugin in `/plugins` demonstrating an effect + a UI panel
+## Milestone 3 — Transitions (~2-3 weeks)
 
-## Milestone 6 — Export pipeline (~4-5 weeks)
-- Hardware-accelerated encode (NVENC/QuickSync/VideoToolbox) via FFmpeg
-- Platform presets (YouTube/TikTok/Instagram/cinema/lossless)
-- Batch queue with pause/resume/cancel, background export while editing
+Cross dissolve, fade in/out, dip to black/white, wipe, slide, push, zoom,
+spin, blur, glitch, light leak, film burn, morph, custom transitions, duration
+control. Sidebar **Transitions** panel lists presets; engine lands here.
 
-## Milestone 7 — Color management (~5-7 weeks)
-- Scopes (waveform, vector scope, RGB parade, histogram) as real-time
-  GPU-computed overlays
-- LUT import/application, color wheels, curves
-- ACES-ready working color space; Rec.709/Rec.2020 output transforms
+---
 
-## Milestone 8 — Cross-platform ports (~6-10 weeks)
-- Windows/macOS CI build legs (this repo currently validates Linux only)
-- Mobile (Android/iOS): the `nova_core`/`nova_timeline`/`nova_media` modules
-  have no Qt dependency and are the right layer to port first; mobile UI is
-  a separate, largely-new `nova_ui_mobile` target rather than a port of the
-  Qt desktop shell
+## Milestone 4 — Video effects (~6-8 weeks)
 
-## Explicitly future / out of scope for the offline-first core
-- Cloud sync, networking, and AI modules (speech-to-text, scene detection,
-  auto subtitles, upscaling) are designed as optional plugins per the
-  Plugin SDK (Milestone 5), never a hard dependency of the core app.
+**Visual:** blur, motion blur, sharpen, noise reduction, film grain, vignette,
+glow, lens flare, chromatic aberration, pixelate, distortion, mirror,
+kaleidoscope, VHS/retro/cyberpunk/cinematic looks.
 
-## Immediate next PRs (good first contributions)
-1. Multi-clip drag-and-drop onto the timeline (extends `TimelineWidget`)
-2. Waveform rendering for audio clips once `nova_audio` lands
-3. A second GLSL effect (e.g. Gaussian blur) to validate the node-graph
-   design before committing to its full API
-4. GitHub Actions legs for Windows (MSVC) and macOS (Clang) builds
+**AI (plugin):** background removal, object tracking, scene detection,
+enhancement, stabilization, upscaling, frame interpolation, color correction.
+
+Generalize the renderer into a stackable, keyframeable effect graph (ping-pong
+FBOs). Port existing brightness/contrast/saturation as first nodes.
+
+---
+
+## Milestone 5 — Motion & animation (~3-4 weeks)
+
+Keyframe editor, position/scale/rotation/opacity, anchor point, motion paths,
+preset animations, easing curves, camera moves, parallax.
+
+---
+
+## Milestone 6 — Color (~5-7 weeks)
+
+Brightness/contrast/exposure/saturation/temperature/tint/highlights/shadows/
+whites/blacks (partially in preview shader today). Color wheels, curves, LUTs,
+HDR, scopes (histogram, waveform, vectorscope), selective color, skin tone.
+
+---
+
+## Milestone 7 — Text & titles (~3-4 weeks)
+
+Sidebar **Text** panel mirrors Clipchamp categories: lower thirds, quotes,
+ratings, credits, timers, meme bars, intro/outro. Animated text, captions,
+auto captions, translation, font library, outlines/shadows, 3D text.
+
+---
+
+## Milestone 8 — Graphics (~2-3 weeks)
+
+Stickers, shapes, emojis, icons, logos, watermarks, PNG/SVG layers, vector
+overlays, template marketplace hooks.
+
+---
+
+## Milestone 9 — Green screen & compositing (~4-5 weeks)
+
+Chroma key, AI segmentation, background replace, virtual backgrounds, shape/
+freehand masks, feathering, motion-tracked masks, blend modes, alpha channels.
+
+---
+
+## Milestone 10 — Recording (Clipchamp-style) (~4-6 weeks)
+
+Screen, webcam, screen+webcam, mic, game/window/region capture, recording
+overlays. Likely Qt Multimedia + platform capture APIs.
+
+---
+
+## Milestone 11 — Proxy & performance (~3-4 weeks)
+
+GPU acceleration (Vulkan/OpenGL today; CUDA/DirectX/Metal encode later), proxy
+editing, background render queue, RAM/disk cache, crash recovery, low-end PC
+mode, multi-thread rendering.
+
+---
+
+## Milestone 12 — Export & social (~4-5 weeks)
+
+**Formats:** MP4, MOV, WebM, GIF, image sequences.
+
+**Presets:** 480p–8K, 24/30/60/120 fps, bitrate/codec, hardware encode.
+
+**Social:** YouTube, TikTok, Reels, Shorts, Twitch, X, Facebook — aspect ratio
+conversion, vertical editor, safe zones, thumbnail creator.
+
+---
+
+## Milestone 13 — Plugin SDK (~4-6 weeks)
+
+Stable C ABI for effects, transitions, exporters, importers, cloud/AI plugins.
+Example plugin in `/plugins`.
+
+---
+
+## Milestone 14 — Cross-platform (~6-10 weeks)
+
+Windows ✅ (primary dev), Linux/macOS CI legs, Android/iOS via headless
+`nova_core`/`nova_timeline`/`nova_media` + separate mobile UI.
+
+---
+
+## Professional / future (explicitly optional)
+
+Collaborative editing, live multiplayer timeline, plugin marketplace, asset/
+template marketplace, scripting API, virtual production, 3D/VR timeline,
+Fusion-style compositing, After Effects-style motion design, cloud rendering,
+AI editing agents.
+
+These are **never hard dependencies** of the offline-first core.
+
+---
+
+## Technology stack (unchanged)
+
+| Layer | Choice |
+|-------|--------|
+| Core engine | C++23 |
+| UI | Qt 6 Widgets |
+| Media | FFmpeg |
+| Preview | OpenGL 3.3 (Vulkan later) |
+| GPU encode | NVENC / QuickSync / VideoToolbox via FFmpeg |
+| Apple | Metal path TBD |
+| Cloud / AI | Optional plugins only |
+
+---
+
+## Immediate next PRs
+
+1. Drag-and-drop clips on the timeline (`TimelineWidget`)
+2. Thumbnail + waveform in media library
+3. Second GLSL effect (Gaussian blur) to validate effect graph
+4. Windows + macOS GitHub Actions build legs
+5. Wire sidebar Text presets to `ClipType::Title` clips

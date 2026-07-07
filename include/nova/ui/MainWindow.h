@@ -5,25 +5,23 @@
 #include <memory>
 
 #include "nova/media/Decoder.h"
-#include "nova/timeline/Timeline.h"
+#include "nova/project/Project.h"
 
-class QListWidget;
+class QComboBox;
 class QSlider;
 class QLabel;
 class QPushButton;
 class QAudioOutput;
 class QMediaPlayer;
+class QListWidget;
 
 namespace nova::renderer { class VideoPreviewWidget; }
 
 namespace nova::ui {
 
 class TimelineWidget;
+class SidebarPanel;
 
-// Application shell: dockable Media Bin / Timeline / Inspector panels around
-// a central GPU preview. Wires a real decode -> render loop (via QTimer at
-// the source frame rate) so importing a clip and pressing Play does an
-// actual end-to-end playback, not a mock.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -31,42 +29,71 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
+    bool openProjectPath(const QString& path);
+    bool newProjectAtPath(const QString& path, double fps, int width, int height);
+    bool newProjectFromTemplate(const QString& templatePathOrId);
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
 private slots:
+    void onNewProject();
+    void onOpenProject();
+    void onSaveProject();
+    void onSaveProjectAs();
+    void onExportProjectCopy();
+    void onShowVersionHistory();
+    void onRecentProjectTriggered();
     void onImportMedia();
     void onMediaItemActivated();
+    void onMediaSearchChanged();
+    void onMediaFolderChanged();
+    void onTimelineSelectionChanged(int index);
+    void onAddTimeline();
     void onPlayPauseClicked();
     void onPlaybackTick();
     void onTimelineSeek(double seconds);
     void onSplitAtPlayhead();
     void onExtractAudio();
     void onVolumeChanged(int value);
+    void onAutosaveTick();
+    void onTemplateActivated(const QString& templatePath);
 
 private:
     void buildDockPanels();
     void buildMenus();
     void applyTheme();
+    void markDirty();
+    bool maybeSaveBeforeDiscard();
+    bool saveProjectToPath(const QString& path, bool addToRecents);
+    void applyProjectToUi();
+    void refreshMediaList();
     void loadMediaIntoPreview(const QString& path);
     void addClipToTimeline(const QString& path);
     void syncAudioToCurrentTime();
+    nova::timeline::Timeline* activeTimeline();
 
     nova::renderer::VideoPreviewWidget* preview_ = nullptr;
     TimelineWidget* timelineWidget_ = nullptr;
-    QListWidget* mediaBin_ = nullptr;
+    SidebarPanel* sidebar_ = nullptr;
+    QComboBox* timelineSelector_ = nullptr;
     QSlider* brightnessSlider_ = nullptr;
     QSlider* contrastSlider_ = nullptr;
     QSlider* saturationSlider_ = nullptr;
     QSlider* volumeSlider_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* timeLabel_ = nullptr;
+    QLabel* projectMetaLabel_ = nullptr;
     QPushButton* playButton_ = nullptr;
     QPushButton* splitButton_ = nullptr;
     QPushButton* extractAudioButton_ = nullptr;
 
+    std::unique_ptr<nova::project::Project> project_;
     std::unique_ptr<nova::media::Decoder> decoder_;
-    std::unique_ptr<nova::timeline::Timeline> timeline_;
     QMediaPlayer* audioPlayer_ = nullptr;
     QAudioOutput* audioOutput_ = nullptr;
     QTimer playbackTimer_;
+    QTimer autosaveTimer_;
     bool playing_ = false;
     double currentTimeSeconds_ = 0.0;
     QString currentMediaPath_;
