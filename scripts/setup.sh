@@ -51,6 +51,7 @@ install_linux_deps() {
         cmake \
         pkg-config \
         qt6-base-dev \
+        qt6-multimedia-dev \
         libgl1-mesa-dev \
         libavcodec-dev \
         libavformat-dev \

@@ -44,7 +44,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 | CMake | build system |
 | Python | download prebuilt Qt |
 | Visual Studio Build Tools | C++ compiler (only if you don't already have one) |
-| Qt 6.8.3 | app UI (downloaded, not compiled) |
+| Qt 6.8.3 | app UI and audio playback (downloaded, not compiled) |
 | FFmpeg | video decoding (built once via vcpkg) |
 
 Re-running `setup.ps1` skips tools and downloads that are already present.

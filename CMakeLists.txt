@@ -23,7 +23,7 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets Multimedia)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
@@ -46,6 +46,7 @@ target_link_libraries(nova_timeline INTERFACE nova_core)
 # --- nova_media: FFmpeg decode wrapper ---
 add_library(nova_media STATIC
     src/media/Decoder.cpp
+    src/media/AudioExtractor.cpp
 )
 target_include_directories(nova_media PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(nova_media PUBLIC nova_core PkgConfig::FFMPEG)
@@ -66,11 +67,11 @@ add_library(nova_ui STATIC
     include/nova/ui/TimelineWidget.h
 )
 target_include_directories(nova_ui PUBLIC ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(nova_ui PUBLIC nova_core nova_timeline nova_media nova_renderer Qt6::Widgets Qt6::OpenGLWidgets)
+target_link_libraries(nova_ui PUBLIC nova_core nova_timeline nova_media nova_renderer Qt6::Widgets Qt6::OpenGLWidgets Qt6::Multimedia)
 
 # --- nova_studio: application executable ---
 add_executable(nova_studio src/app/main.cpp)
-target_link_libraries(nova_studio PRIVATE nova_ui Qt6::Widgets Qt6::OpenGLWidgets)
+target_link_libraries(nova_studio PRIVATE nova_ui Qt6::Widgets Qt6::OpenGLWidgets Qt6::Multimedia)
 
 if(APPLE)
     set_target_properties(nova_studio PROPERTIES MACOSX_BUNDLE TRUE)

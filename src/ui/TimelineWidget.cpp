@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QFontMetrics>
 #include <algorithm>
+#include <cmath>
 
 namespace nova::ui {
 
@@ -11,7 +12,7 @@ using nova::timeline::Clip;
 using nova::timeline::TrackType;
 
 TimelineWidget::TimelineWidget(QWidget* parent) : QWidget(parent) {
-    setMinimumHeight(200);
+    setMinimumHeight(260);
     setMouseTracking(true);
 }
 
@@ -28,7 +29,7 @@ void TimelineWidget::setPlayheadSeconds(double seconds) {
 void TimelineWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.fillRect(rect(), QColor(30, 30, 34));
+    painter.fillRect(rect(), QColor(16, 18, 24));
 
     if (!timeline_) {
         painter.setPen(QColor(140, 140, 145));
@@ -37,19 +38,29 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
     }
 
     const double fps = timeline_->frameRate() > 0 ? timeline_->frameRate() : 30.0;
+    const int laneWidth = std::max(0, width() - kHeaderWidth);
     int y = 4;
+
+    painter.setPen(QColor(70, 78, 92));
+    for (int second = 0; second <= std::max(1, laneWidth / static_cast<int>(pixelsPerSecond_) + 2); ++second) {
+        const int x = kHeaderWidth + static_cast<int>(second * pixelsPerSecond_);
+        painter.drawLine(x, 0, x, height());
+        painter.setPen(QColor(135, 143, 158));
+        painter.drawText(x + 4, 14, QString::number(second) + "s");
+        painter.setPen(QColor(45, 51, 62));
+    }
 
     for (const auto& track : timeline_->tracks()) {
         QRect headerRect(0, y, kHeaderWidth, kTrackHeight);
-        painter.fillRect(headerRect, QColor(42, 42, 48));
+        painter.fillRect(headerRect, QColor(28, 32, 41));
         painter.setPen(QColor(210, 210, 215));
         painter.drawText(headerRect.adjusted(8, 0, -4, 0), Qt::AlignVCenter | Qt::AlignLeft,
                           QString::fromStdString(track->name()));
 
         QRect laneRect(kHeaderWidth, y, width() - kHeaderWidth, kTrackHeight);
         painter.fillRect(laneRect, track->type() == TrackType::Video
-                                        ? QColor(24, 26, 30)
-                                        : QColor(22, 28, 26));
+                                        ? QColor(19, 22, 29)
+                                        : QColor(17, 26, 24));
 
         for (const Clip& clip : track->clips()) {
             double startSec = clip.timelineStart / fps;
@@ -59,11 +70,20 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
 
             QRect clipRect(x, y + 4, w, kTrackHeight - 8);
             QColor clipColor = track->type() == TrackType::Video
-                                    ? QColor(70, 120, 200)
-                                    : QColor(80, 170, 120);
+                                    ? QColor(64, 105, 210)
+                                    : QColor(46, 168, 125);
             painter.setBrush(clipColor);
-            painter.setPen(clipColor.darker(140));
+            painter.setPen(QPen(clipColor.lighter(125), 1));
             painter.drawRoundedRect(clipRect, 4, 4);
+
+            if (track->type() == TrackType::Audio) {
+                painter.setPen(QColor(190, 255, 225, 130));
+                const int centerY = clipRect.center().y();
+                for (int px = clipRect.left() + 6; px < clipRect.right() - 4; px += 5) {
+                    const int amp = 4 + static_cast<int>(std::abs(std::sin(px * 0.17)) * (clipRect.height() / 2 - 7));
+                    painter.drawLine(px, centerY - amp, px, centerY + amp);
+                }
+            }
 
             painter.setPen(Qt::white);
             QFontMetrics fm(painter.font());

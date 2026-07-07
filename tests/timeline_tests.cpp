@@ -61,10 +61,18 @@ int main() {
     expect(v1.findClip("b")->timelineStart == 120, "ripple shifts clip B by the same delta");
     expect(v1.findClip("b")->timelineEnd == 180, "ripple shifts clip B's end too");
 
+    expect(v1.splitClipAt("a", 60, "a-right"), "split cuts clip A at a valid interior frame");
+    expect(v1.findClip("a")->timelineStart == 0, "left split keeps original start");
+    expect(v1.findClip("a")->timelineEnd == 60, "left split ends at blade frame");
+    expect(v1.findClip("a-right")->timelineStart == 60, "right split starts at blade frame");
+    expect(v1.findClip("a-right")->timelineEnd == 120, "right split keeps original end");
+    expect(v1.findClip("a-right")->sourceIn == 60, "right split source in advances by cut offset");
+    expect(!v1.splitClipAt("a", 0, "bad"), "split on clip edge is rejected");
+
     expect(!v1.rippleTrimEnd("nonexistent", 200), "ripple-trim on missing clip fails gracefully");
 
     expect(v1.removeClip("a"), "removeClip succeeds for an existing clip");
-    expect(v1.clips().size() == 1, "track has one clip after removal");
+    expect(v1.clips().size() == 2, "track keeps right split and clip B after removal");
     expect(!v1.removeClip("a"), "removeClip on already-removed clip fails");
 
     if (g_failures > 0) {

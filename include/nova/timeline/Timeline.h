@@ -94,6 +94,36 @@ public:
         return it == clips_.end() ? nullptr : &(*it);
     }
 
+    const Clip* findClipAt(FrameNumber frame) const {
+        auto it = std::find_if(clips_.begin(), clips_.end(),
+                               [&](const Clip& c) {
+                                   return frame > c.timelineStart && frame < c.timelineEnd;
+                               });
+        return it == clips_.end() ? nullptr : &(*it);
+    }
+
+    // Blade/split edit: cut a clip into left/right halves at `frame`.
+    // Returns false when the cut is outside the clip or exactly on an edge.
+    bool splitClipAt(const std::string& clipId, FrameNumber frame, std::string newClipId) {
+        auto it = std::find_if(clips_.begin(), clips_.end(),
+                               [&](const Clip& c) { return c.id == clipId; });
+        if (it == clips_.end() || frame <= it->timelineStart || frame >= it->timelineEnd) {
+            return false;
+        }
+
+        Clip right = *it;
+        right.id = std::move(newClipId);
+        right.name += " (cut)";
+        right.sourceIn += frame - it->timelineStart;
+        right.timelineStart = frame;
+
+        it->sourceOut = it->sourceIn + (frame - it->timelineStart);
+        it->timelineEnd = frame;
+
+        clips_.insert(std::next(it), std::move(right));
+        return true;
+    }
+
     // Ripple trim: change a clip's timelineEnd/timelineStart and shift every
     // later clip on this track by the resulting delta. Returns false if the
     // clip isn't found or the edit would produce a negative-length clip.

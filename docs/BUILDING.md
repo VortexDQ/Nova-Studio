@@ -55,7 +55,7 @@ faster afterward.
 |---|---|---|
 | CMake ≥ 3.24 | `cmake` | |
 | A C++23 compiler | `g++` / `clang` / MSVC 2022 17.8+ | |
-| Qt 6 (Widgets, OpenGLWidgets) | `qt6-base-dev` | |
+| Qt 6 (Widgets, OpenGLWidgets, Multimedia) | `qt6-base-dev qt6-multimedia-dev` | |
 | FFmpeg dev libs | `libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev` | |
 | OpenGL dev headers | `libgl1-mesa-dev` | |
 | pkg-config | `pkg-config` | used to locate FFmpeg |
@@ -66,7 +66,7 @@ Prefer `./scripts/setup.sh`. Manual equivalent:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential cmake pkg-config qt6-base-dev libgl1-mesa-dev \
+sudo apt-get install -y build-essential cmake pkg-config qt6-base-dev qt6-multimedia-dev libgl1-mesa-dev \
     libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
 
 cmake --preset linux
@@ -95,7 +95,7 @@ Prefer `.\scripts\setup.ps1`. Manual equivalent:
 git clone --depth 1 https://github.com/microsoft/vcpkg.git .vcpkg
 .\.vcpkg\bootstrap-vcpkg.bat -disableMetrics
 python -m pip install aqtinstall
-python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -m qtopenglwidgets --outputdir .qt
+python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -m qtopenglwidgets -m qtmultimedia --outputdir .qt
 cmake --preset windows
 cmake --build --preset windows -j
 ctest --preset windows

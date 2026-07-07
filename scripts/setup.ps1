@@ -33,7 +33,7 @@ Set-Location $Root
 
 $QtVersion = "6.8.3"
 $QtArch = "win64_msvc2022_64"
-$QtModules = @("qtopenglwidgets")
+$QtModules = @("qtopenglwidgets", "qtmultimedia")
 $VcpkgTriplet = "x64-windows-release"
 
 function Write-Step {
@@ -187,7 +187,8 @@ function Get-QtInstallPath {
 
     foreach ($candidate in $candidates) {
         $config = Join-Path $candidate "lib\cmake\Qt6\Qt6Config.cmake"
-        if (Test-Path $config) {
+        $multimediaConfig = Join-Path $candidate "lib\cmake\Qt6Multimedia\Qt6MultimediaConfig.cmake"
+        if ((Test-Path $config) -and (Test-Path $multimediaConfig)) {
             return (Resolve-Path $candidate).Path
         }
     }
